@@ -104,12 +104,12 @@ class BaseWorker:
             
         else:
             if current_config['drug_encoding'] != 'Transformer' and current_config['target_encoding'] == 'Transformer':
-                current_config['transformer_emb_size_target'] = current_config['hidden_dim_drug']
+                #current_config['transformer_emb_size_target'] = current_config['hidden_dim_drug']
                 while int(current_config['transformer_emb_size_target']) % int(current_config['transformer_num_attention_heads_target']) != 0:
                     current_config['transformer_num_attention_heads_target'] = current_config['transformer_num_attention_heads_target'] + 1 
 
             elif current_config['drug_encoding'] == 'Transformer' and current_config['drug_encoding'] != 'Transformer':
-                current_config['transformer_emb_size_drug'] = current_config['hidden_dim_target']
+                #current_config['transformer_emb_size_drug'] = current_config['hidden_dim_target']
                 while int(current_config['transformer_emb_size_durg']) % int(current_config['transformer_num_attention_heads_drug']) != 0:
                     current_config['transformer_num_attention_heads_drug'] = current_config['transformer_num_attention_heads_drug'] + 1 
             
