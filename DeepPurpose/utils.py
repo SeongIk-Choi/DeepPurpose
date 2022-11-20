@@ -24,7 +24,6 @@ from zipfile import ZipFile
 import os
 import sys
 import pathlib
-import pandas 
 
 this_dir = str(pathlib.Path(__file__).parent.absolute())
 
