@@ -8,6 +8,8 @@ import os
 from typing import Optional
 from DeepPurpose.utils import BaseExperimentInfo, get_optimization_direction
 import torchvision.transforms as transforms
+import shutil
+from distutils.dir_util import copy_tree
 
 sys.path.insert(0, '../../../..')
 import random
@@ -64,6 +66,7 @@ class HyperBand:
                 )
                 for c in range(d['n_i'][0])
             ]
+
             # this is basically the successive halving routine
             for iteration in range(d['num_iters']):
                 self.configs_to_evaluate = self.configs_to_evaluate[
@@ -104,25 +107,23 @@ class HyperBand:
             best_overall_config = max(
                 [experiment for bracket_id, bracket in self.experiment_history.items() for experiment in
                  bracket[max(list(bracket.keys()))]])
-        best_overall_config.info['config']['experiment_name'] = 'best_model'
-        #print("확인:" ,best_overall_config)
-        #print("확인2:", best_overall_config.info)
-        #print("확인3:", best_overall_config.info['config'])
-        #print("확인4:", best_overall_config.info['config']['experiment_name'])
-        #print("확인5:", best_overall_config.info['model_dir'])
-        #print("확인:",str(best_overall_config.info['model_dir'])[:-9])
-        model_save_path = str(best_overall_config.info['model_dir'])[:-9]
-        print("확인:", best_overall_config.info)
-        if not os.path.exists(model_save_path):
-            os.mkdir(model_save_path)
+        #best_overall_config.info['config']['experiment_name'] = 'best_model'
+
+        best_model_save_path = './best_model'
+        if not os.path.exists(best_model_save_path):
+            os.mkdir(best_model_save_path)
         if self.verbose:
             print('Best overall configuration: ')
+            best_model_tmp_path = str(best_overall_config.info['model_dir'])[:-9]
+            best_model_save_path = best_model_save_path+'/'+ best_overall_config.info['config']['drug_encoding']+'_'+best_overall_config.info['config']['target_encoding']
+            copy_tree(best_model_tmp_path, best_model_save_path)
+            '''
             pkl_file = os.path.join(model_save_path, "config.pkl")
             with open(pkl_file, 'wb') as pck:
                 pickle.dump(best_overall_config.info['config'], pck)
-            #model.save(best_overall_config.info['model_dir'], best_overall_config.info['model_dir'])
             torch.save(best_overall_config.info['model_dir'], model_save_path+'/best_model.pt')
-            #self.model.state_dict()
+            '''
+
             print(best_overall_config)
 
         return best_overall_config

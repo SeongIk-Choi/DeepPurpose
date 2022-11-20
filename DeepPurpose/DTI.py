@@ -475,6 +475,7 @@ class DBTA:
 		best_val_metrics_dict = None
 		valid_metric_record = []
 		valid_metric_header = ["# epoch"] 
+		val_loss_list=[]
 		if self.binary:
 			valid_metric_header.extend(["AUROC", "AUPRC", "F1"])
 		else:
@@ -495,8 +496,9 @@ class DBTA:
 				if self.drug_encoding in ["MPNN", 'Transformer', 'DGL_GCN', 'DGL_NeuralFP', 'DGL_GIN_AttrMasking', 'DGL_GIN_ContextPred', 'DGL_AttentiveFP']:
 					v_d = v_d
 				else:
-					v_d = v_d.float().to(self.device)                
+					v_d = v_d.float().to(self.device)               
 					#score = self.model(v_d, v_p.float().to(self.device))
+
 				score = self.model(v_d, v_p)
 				label = Variable(torch.from_numpy(np.array(label)).float()).to(self.device)
 				if self.binary:
@@ -509,6 +511,7 @@ class DBTA:
 					n = torch.squeeze(score, 1)
 					loss = loss_fct(n, label)
 				loss_history.append(loss.item())
+				val_loss_list.append(loss)
 				writer.add_scalar("Loss/train", loss.item(), iteration_loss)
 				iteration_loss += 1
 
@@ -538,7 +541,7 @@ class DBTA:
 						if auc > max_auc:
 							model_max = copy.deepcopy(self.model)
 							max_auc = auc
-							best_val_metrics_dict = {'val_AUC': auc, 'val_AUPRC': auprc, 'val_f1': f1, 'val_loss': loss}  
+							best_val_metrics_dict = {'val_AUC': auc, 'val_AUPR': auprc, 'val_f1': f1, 'val_loss': loss} # It was written as aupr.   
 						if verbose:
 							print('Validation at Epoch '+ str(epo + 1) + ', AUROC: ' + str(auc)[:7] + \
 							  ' , AUPRC: ' + str(auprc)[:7] + ' , F1: '+str(f1)[:7] + ' , Cross-entropy Loss: ' + \
@@ -602,7 +605,7 @@ class DBTA:
 					  ' , AUPRC: ' + str(auprc)[:7] + ' , F1: '+str(f1)[:7] + ' , Cross-entropy Loss: ' + \
 					  str(loss)[:7])	
 				if self.wandb_run is not None:
-					self.wandb_run.log({'train_AUC': auc, 'train_AUPRC': auprc, 'train_f1': f1, 'train_loss': loss})			
+					self.wandb_run.log({'test_AUC': auc, 'test_AUPRC': auprc, 'test_f1': f1, 'test_loss': loss})			
 			else:
 				mse, r2, p_val, CI, logits, loss_test = self.test_(testing_generator, model_max)
 				test_table = PrettyTable(["MSE", "Pearson Correlation", "with p-value", "Concordance Index"])
@@ -639,10 +642,12 @@ class DBTA:
 			print('--- Training Finished ---')
 			writer.flush()
 			writer.close()
+			 
 
 		if self.wandb_run is not None:
 			self.wandb_run.finish()
-          
+
+		return val_loss_list
 
 	def predict(self, df_data):
 		'''
@@ -680,7 +685,7 @@ class DBTA:
 
 		state_dict = torch.load(path, map_location = torch.device('cpu'))
 		# to support training from multi-gpus data-parallel:
-        
+		
 		if next(iter(state_dict))[:7] == 'module.':
 			# the pretrained model is from data-parallel module
 			from collections import OrderedDict
@@ -693,5 +698,3 @@ class DBTA:
 		self.model.load_state_dict(state_dict)
 
 		self.binary = self.config['binary']
-
-

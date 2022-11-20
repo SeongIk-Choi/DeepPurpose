@@ -184,6 +184,7 @@ class CNN_RNN(nn.Sequential):
 		return x
 
 	def forward(self, v):
+		self.rnn.flatten_parameters()
 		for l in self.conv:
 			v = F.relu(l(v.double()))
 		batch_size = v.size(0)
@@ -222,18 +223,18 @@ class MLP(nn.Sequential):
 			input_dim (int)
 			output_dim (int)
 			hidden_dims_lst (list, each element is a integer, indicating the hidden size)
-
 		'''
 		super(MLP, self).__init__()
 		self.device = device
 		layer_size = len(hidden_dims_lst) + 1
 		dims = [input_dim] + hidden_dims_lst + [output_dim]
-
+		
 		self.predictor = nn.ModuleList([nn.Linear(dims[i], dims[i+1]) for i in range(layer_size)])
-
+		
 	def forward(self, v):
 		# predict
 		v = v.float().to(self.device)
+		
 		for i, l in enumerate(self.predictor):
 			v = F.relu(l(v))
 		return v  

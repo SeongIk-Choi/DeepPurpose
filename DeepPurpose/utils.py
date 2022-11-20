@@ -24,7 +24,6 @@ from zipfile import ZipFile
 import os
 import sys
 import pathlib
-import pandas 
 
 this_dir = str(pathlib.Path(__file__).parent.absolute())
 
@@ -225,9 +224,7 @@ def smiles2mpnnfeature(smiles):
 			data_process(): apply(smiles2mpnnfeature)
 			DBTA: train(): data.DataLoader(data_process_loader())
 			mpnn_collate_func()
-
 	## utils.smiles2mpnnfeature -> utils.mpnn_collate_func -> utils.mpnn_feature_collate_func -> encoders.MPNN.forward
-
 	'''
 	try: 
 		padding = torch.zeros(ATOM_FDIM + BOND_FDIM)
@@ -811,7 +808,7 @@ class data_process_loader_Protein_Prediction(data.Dataset):
 
 
 def generate_config(drug_encoding = None, target_encoding = None, 
-					result_folder = "./result/",
+					result_folder = "./",
 					input_dim_drug = 1024, 
 					input_dim_protein = 8420,
 					hidden_dim_drug = 256, 
@@ -867,6 +864,8 @@ def generate_config(drug_encoding = None, target_encoding = None,
 					delta = 0,
 					metric_to_optimize_early_stopping = 'loss',
 					metric_to_optimize_best_epoch_selection = 'loss',
+                    hpo_results_path = './',
+                    additional_info = {},
 					):
 
 	base_config = {'input_dim_drug': input_dim_drug,
@@ -878,6 +877,8 @@ def generate_config(drug_encoding = None, target_encoding = None,
 					'train_epoch': train_epoch,
 					'test_every_X_epoch': test_every_X_epoch, 
 					'LR': LR,
+					'mlp_hidden_dims_drug' : mlp_hidden_dims_drug,
+					'mlp_hidden_dims_target' : mlp_hidden_dims_target,
 					'drug_encoding': drug_encoding,
 					'target_encoding': target_encoding, 
 					'result_folder': result_folder,
@@ -893,6 +894,8 @@ def generate_config(drug_encoding = None, target_encoding = None,
 					'delta': delta,
 					'metric_to_optimize_early_stopping': metric_to_optimize_early_stopping,
 					'metric_to_optimize_best_epoch_selection': metric_to_optimize_best_epoch_selection,
+                    'additional_info': additional_info,
+                    'hpo_results_path': hpo_results_path,
 
 	}
 	if not os.path.exists(base_config['result_folder']):
@@ -1571,3 +1574,116 @@ class EarlyStopping:
 			self.best_epoch = epoch
 			self.best_performance_results = performance_results
 			self.counter = 0
+
+
+
+
+def get_optimization_direction(metric_name: str) -> str:
+    '''Determines if the goal is to maximize or minimize based on the name of the metric
+    Args:
+        metric_name (sting): the name of the metric
+    Returns:
+        string: max if the goal is go maximize or min if the goal is to mimize  
+    '''
+    metrics_to_max = ['sensitivity', 'f1_score', 'recall', 'positive_predictive_value', 'R2', 'accuracy', 'precision', 'auroc', 'aupr']
+    if True in [n in metric_name for n in metrics_to_max]:
+        return 'max'
+    return 'min'
+
+class BaseExperimentInfo:    # pragma: no cover
+    """A class used to keep track of all relevant info of a given experiment. This is mainly used by the HPO methods.
+    """    
+    def __init__(self, config, budget):
+        self.config = config
+        self.score = 0
+        self.budget = budget
+        self.info = {}
+
+    def update_score(self, score):
+        self.score = score
+
+    def get_config(self):
+        return self.config
+
+    def get_budget(self):
+        return self.budget
+
+    def __lt__(self, other):
+        return self.score < other.score
+
+    def __le__(self, other):
+        return self.score <= other.score
+
+    def __eq__(self, other):
+        return self.score == other.score
+
+    def __ne__(self, other):
+        return self.score != other.score
+
+    def __gt__(self, other):
+        return self.score > other.score
+
+    def __ge__(self, other):
+        return self.score >= other.score
+
+    def __repr__(self):
+        return (
+            'config: '
+            + str(self.config)
+            + '  |  budget: '
+            + str(self.budget)
+            + '  |  score: '
+            + str(self.score)
+            + '\n'
+            + str(self.info)
+            + '\n'
+            + '\n'
+        )
+
+def get_default_dropout_rate():    # pragma: no cover
+    ''' To return the default dropout rate
+    Returns:
+        int: The value 0
+    '''    
+    return 0
+
+def get_default_batch_norm():    # pragma: no cover
+    ''' To return the default batch_norm value
+    Returns:
+        float: The value False 
+    '''   
+    return False
+
+# dafault transofmations applied for resnet inputs 
+def get_default_train_transform():    # pragma: no cover
+    ''' To return the default transformation pipeline for a resnet during training
+    Returns:
+       torchvision.transforms : A transformation pipeline 
+    '''  
+    pretrained_size = 224
+    pretrained_means = [0.485, 0.456, 0.406]
+    pretrained_stds= [0.229, 0.224, 0.225]
+    return transforms.Compose([
+                           transforms.Resize((pretrained_size, pretrained_size)),
+                           transforms.RandomRotation(5),
+                           transforms.RandomHorizontalFlip(0.5),
+                           transforms.RandomCrop(pretrained_size, padding = 10),
+                           transforms.ToTensor(),
+                           transforms.Normalize(mean = pretrained_means, 
+                                                std = pretrained_stds)
+                       ])
+def get_default_inference_transform():    # pragma: no cover
+    ''' To return the default transformation pipeline for a resnet during inference
+    Returns:
+       torchvision.transforms : A transformation pipeline 
+    ''' 
+    pretrained_size = 224
+    pretrained_means = [0.485, 0.456, 0.406]
+    pretrained_stds= [0.229, 0.224, 0.225]
+    return transforms.Compose([
+                           transforms.Resize((pretrained_size, pretrained_size)),
+                           transforms.ToTensor(),
+                           transforms.Normalize(mean = pretrained_means, 
+                                                std = pretrained_stds)
+                       ])
+
