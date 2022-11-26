@@ -67,25 +67,43 @@ class BaseWorker:
                 'run_name': [],
                 'config': final_config,
             }
-
+        MLP_drug_list = ['Morgan', 'ErG', 'Pubchem', 'Daylight', 'rdkit_2d_normalized', 'ESPF'] 
+        MLP_target_list = ['ACC', 'Pseudo AAC', 'Conjoint_triad', 'Quasi-seq', 'ESPF']
         # update the actual budget that will be used to train the model
         final_config.update({'num_epochs': int(budget), 'actuall_budget': int(budget), 'train_epoch': int(budget)})
-        
-        update_cnn_drug_filters = [int(temp_config['cnn_drug_filter_number']), int(temp_config['cnn_drug_filter_number'])*2, int(temp_config['cnn_drug_filter_number'])*3]
-        update_cnn_drug_kernels = [int(temp_config['cnn_drug_kernel_number']), int(temp_config['cnn_drug_kernel_number'])*2, int(temp_config['cnn_drug_kernel_number'])*3]
-        update_cnn_target_filters = [int(temp_config['cnn_target_filter_number']), int(temp_config['cnn_target_filter_number'])*2, int(temp_config['cnn_target_filter_number'])*3]
-        update_cnn_target_kernels = [int(temp_config['cnn_target_kernel_number']), int(temp_config['cnn_target_kernel_number'])*2, int(temp_config['cnn_target_kernel_number'])*3]
-        update_cls_hidden_dims = [int(temp_config['cls_hidden_dim_number']), int(temp_config['cls_hidden_dim_number']), int(temp_config['cls_hidden_dim_number']/2)]
-        update_mlp_hidden_dim_drug = [int(temp_config['mlp_hidden_dim_drug_number']), int(temp_config['mlp_hidden_dim_drug_number']/4), int(temp_config['mlp_hidden_dim_drug_number']/16)]
-        update_mlp_hidden_dim_target = [int(temp_config['mlp_hidden_dim_target_number']), int(temp_config['mlp_hidden_dim_target_number']/4), int(temp_config['mlp_hidden_dim_target_number']/16)]
-
-        MLP_drug_encoding_dict = {'ESPF': 2586, 'Daylight': 2048, 'rdkit_2d_normalized': 200, 'Pubchem': 881, 'ErG': 315, 'Morgan': 1024}
-        MLP_target_encoding_dict = {'ESPF': 4114, 'Quasi-seq': 100, 'Conjoint_triad': 343, 'PseudoAAC': 30, 'AAC': 8420}
-        
-        
         final_config.update(temp_config) # It updates all of the dictionary value that has same keys between tmp_config and current config. 
-        final_config.update({'cnn_drug_filters': update_cnn_drug_filters, 'cnn_drug_kernels': update_cnn_drug_kernels, 'cnn_target_filters':update_cnn_target_filters, 'cnn_target_kernels': update_cnn_target_kernels, 'cls_hidden_dims': update_cls_hidden_dims, 'mlp_hidden_dims_drug': update_mlp_hidden_dim_drug, 'mlp_hidden_dims_target':update_mlp_hidden_dim_target})
-        
+        if final_config['general_architecture_version'] == 'mlp' :
+            if final_config['drug_encoding'].startswith('CNN') or final_config['target_encoding'].startswith('CNN') :
+                update_cnn_drug_filters = [int(temp_config['cnn_drug_filter_number']), int(temp_config['cnn_drug_filter_number'])*2, int(temp_config['cnn_drug_filter_number'])*3]
+                update_cnn_drug_kernels = [int(temp_config['cnn_drug_kernel_number']), int(temp_config['cnn_drug_kernel_number'])*2, int(temp_config['cnn_drug_kernel_number'])*3]
+                update_cnn_target_filters = [int(temp_config['cnn_target_filter_number']), int(temp_config['cnn_target_filter_number'])*2, int(temp_config['cnn_target_filter_number'])*3]
+                update_cnn_target_kernels = [int(temp_config['cnn_target_kernel_number']), int(temp_config['cnn_target_kernel_number'])*2, int(temp_config['cnn_target_kernel_number'])*3]
+                final_config.update({'cnn_drug_filters': update_cnn_drug_filters, 'cnn_drug_kernels': update_cnn_drug_kernels, 'cnn_target_filters':update_cnn_target_filters, 'cnn_target_kernels': update_cnn_target_kernels})
+
+            if final_config['drug_encoding'] in MLP_drug_list or final_config['target_encoding'] in MLP_target_list :
+                update_mlp_hidden_dim_drug = [int(temp_config['mlp_hidden_dim_drug_number']), int(temp_config['mlp_hidden_dim_drug_number']/4), int(temp_config['mlp_hidden_dim_drug_number']/16)]
+                update_mlp_hidden_dim_target = [int(temp_config['mlp_hidden_dim_target_number']), int(temp_config['mlp_hidden_dim_target_number']/4), int(temp_config['mlp_hidden_dim_target_number']/16)]
+                final_config.update({'mlp_hidden_dims_drug': update_mlp_hidden_dim_drug, 'mlp_hidden_dims_target':update_mlp_hidden_dim_target})
+
+            if final_config['target_encoding'] == 'Transformer':
+                final_config['hidden_dim_protein'] = final_config['transformer_emb_size_target']
+                while int(final_config['transformer_emb_size_target']) % int(final_config['transformer_num_attention_heads_target']) != 0:
+                    final_config['transformer_num_attention_heads_target'] = int(final_config['transformer_num_attention_heads_target']) + 1 
+                    if int(final_config['transformer_num_attention_heads_target']) == int(16):
+                        final_config['transformer_num_attention_heads_target'] = int(1)
+            
+            if final_config['drug_encoding'] == 'Transformer':
+                final_config['hidden_dim_drug'] = final_config['transformer_emb_size_drug']
+                while int(final_config['transformer_emb_size_drug']) % int(final_config['transformer_num_attention_heads_drug']) != 0:
+                    final_config['transformer_num_attention_heads_drug'] = int(final_config['transformer_num_attention_heads_drug']) + 1 
+                    if int(final_config['transformer_num_attention_heads_drug']) == int(16):
+                        final_config['transformer_num_attention_heads_drug'] = int(1)   
+            
+            update_cls_hidden_dims = [int(temp_config['cls_hidden_dim_number']), int(temp_config['cls_hidden_dim_number']), int(temp_config['cls_hidden_dim_number']/2)]
+            
+            final_config.update({'cls_hidden_dims': update_cls_hidden_dims})
+
+        # Think about this part (dot_prodcut) later on...  
         if final_config['general_architecture_version'] == 'dot_product' :
             if final_config['drug_encoding'] != 'Transformer' and final_config['target_encoding'] == 'Transformer':
                 final_config['transformer_emb_size_target'] = final_config['hidden_dim_protein']
@@ -94,35 +112,8 @@ class BaseWorker:
 
             elif final_config['drug_encoding'] == 'Transformer' and final_config['drug_encoding'] != 'Transformer':
                 final_config['transformer_emb_size_drug'] = final_config['hidden_dim_drug']
-                while int(final_config['transformer_emb_size_durg']) % int(final_config['transformer_num_attention_heads_drug']) == 0:
+                while int(final_config['transformer_emb_size_durg']) % int(final_config['transformer_num_attention_heads_drug']) != 0:
                     final_config['transformer_num_attention_heads_drug'] = final_config['transformer_num_attention_heads_drug'] + 1 
-            
-        else:
-            if final_config['drug_encoding'] in MLP_drug_encoding_dict:
-                final_config['input_dim_drug'] = MLP_drug_encoding_dict[final_config['drug_encoding']]
-
-                if final_config['target_encoding'] in MLP_target_encoding_dict:
-                    final_config['input_dim_protein'] = MLP_target_encoding_dict[final_config['target_encoding']]
-                elif final_config['target_encoding'] == 'Transformer':
-                    final_config['hidden_dim_protein'] = final_config['transformer_emb_size_target']
-                    while int(final_config['transformer_emb_size_target']) % int(final_config['transformer_num_attention_heads_target']) != 0:
-                        final_config['transformer_num_attention_heads_target'] = int(final_config['transformer_num_attention_heads_target']) + 1 
-                        if int(final_config['transformer_num_attention_heads_target']) == int(16):
-                            final_config['transformer_num_attention_heads_target'] = int(1)
-
-
-            elif final_config['target_encoding'] in MLP_target_encoding_dict:
-                final_config['input_dim_protein'] = MLP_target_encoding_dict[final_config['target_encoding']]
-
-                if final_config['drug_encoding'] in MLP_drug_encoding_dict:
-                    final_config['input_dim_drug'] = MLP_drug_encoding_dict[final_config['drug_encoding']]
-                elif final_config['drug_encoding'] == 'Transformer':
-                    final_config['hidden_dim_drug'] = final_config['transformer_emb_size_drug']
-
-                    while int(final_config['transformer_emb_size_drug']) % int(final_config['transformer_num_attention_heads_drug']) != 0:
-                        final_config['transformer_num_attention_heads_drug'] = int(final_config['transformer_num_attention_heads_drug']) + 1 
-                        if int(final_config['transformer_num_attention_heads_drug']) == int(16):
-                            final_config['transformer_num_attention_heads_drug'] = int(1)   
                     
         # initialize a new model or continue training from an older version with the same configuration
         if len(self.config_to_model[model_config_key]['model_dir']) != 0:

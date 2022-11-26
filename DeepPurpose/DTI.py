@@ -511,7 +511,7 @@ class DBTA:
 					n = torch.squeeze(score, 1)
 					loss = loss_fct(n, label)
 				loss_history.append(loss.item())
-				val_loss_list.append(loss)
+				#val_loss_list.append(loss)
 				writer.add_scalar("Loss/train", loss.item(), iteration_loss)
 				iteration_loss += 1
 
@@ -556,6 +556,7 @@ class DBTA:
 							model_max = copy.deepcopy(self.model)
 							max_MSE = mse
 							best_val_metrics_dict = {'val_MSE': mse, 'val_pearson_correlation': r2, 'val_concordance_index': CI, 'val_loss': loss_val.item()}
+							val_loss_list.append(best_val_metrics_dict['val_loss'])
 						if verbose:
 							print('Validation at Epoch '+ str(epo + 1) + ' with loss:' + str(loss_val.item())[:7] +', MSE: ' + str(mse)[:7] + ' , Pearson Correlation: '\
 							 + str(r2)[:7] + ' with p-value: ' + str(f"{p_val:.2E}") +' , Concordance Index: '+str(CI)[:7])

@@ -26,6 +26,8 @@ class HyperBand:
             eta=3,
             max_budget=1,
             direction='min',
+            cold_drug=False,
+            cold_protein=False,
             verbose=False,
     ):
         self.base_worker = base_worker
@@ -36,7 +38,9 @@ class HyperBand:
         # Hyperband related stuff
         self.eta = eta
         self.max_budget = max_budget
-
+        self.cold_drug = cold_drug
+        self.cold_protein = cold_protein
+        
         # calculate the hyperband run using the max_budget the eta parameters that are provided by the user
         self.budgets_per_bracket = self.calculate_hyperband_iters(
             R=self.max_budget, eta=eta, verbose=False
