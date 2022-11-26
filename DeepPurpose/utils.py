@@ -1574,9 +1574,6 @@ class EarlyStopping:
 			self.best_epoch = epoch
 			self.best_performance_results = performance_results
 			self.counter = 0
-<<<<<<< HEAD
-
-
 
 
 def get_optimization_direction(metric_name: str) -> str:
@@ -1687,6 +1684,3 @@ def get_default_inference_transform():    # pragma: no cover
                            transforms.Normalize(mean = pretrained_means, 
                                                 std = pretrained_stds)
                        ])
-
-=======
->>>>>>> beb2467d9a60f92408012be6a65c44ebeb15111d
