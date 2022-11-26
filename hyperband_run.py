@@ -14,7 +14,7 @@ from ConfigSpace import CategoricalHyperparameter
 X_drug, X_target, y = load_process_DAVIS('./data/', binary=False)
 
 drug_encoding = 'CNN'
-target_encoding = 'Quasi-seq'
+target_encoding = 'ESPF'
 train, val, test = data_process(X_drug, X_target, y,
                                 drug_encoding, target_encoding,
                                 split_method='random',frac=[0.7,0.1,0.2])
