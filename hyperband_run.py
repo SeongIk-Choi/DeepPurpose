@@ -14,7 +14,7 @@ from ConfigSpace import CategoricalHyperparameter
 X_drug, X_target, y = load_process_DAVIS('./data/', binary=False)
 
 drug_encoding = 'CNN'
-target_encoding = 'ESPF'
+target_encoding = 'Conjoint_triad'
 train, val, test = data_process(X_drug, X_target, y,
                                 drug_encoding, target_encoding,
                                 split_method='random',frac=[0.7,0.1,0.2])
@@ -26,8 +26,8 @@ cs= CS.ConfigurationSpace()
 
 LR= CSH.UniformFloatHyperparameter("LR", lower=1e-6, upper=1e-3, default_value=1e-3, log=True)
 cls_hidden_dim_number = CSH.UniformIntegerHyperparameter("cls_hidden_dim_number", lower=4, upper=1024, default_value=1024, log=False)
-
-cs.add_hyperparameters([LR, cls_hidden_dim_number,])
+depth = CSH.UniformIntegerHyperparameter("depth", lower=1, upper=4, default_value=3, log=False)
+cs.add_hyperparameters([LR, cls_hidden_dim_number, depth,])
 
 if drug_encoding == 'CNN' or target_encoding == 'CNN':
     cnn_drug_filter_number = CSH.UniformIntegerHyperparameter("cnn_drug_filter_number", lower=4, upper=64, default_value=32, log=False)
@@ -103,6 +103,7 @@ config = generate_config(drug_encoding = drug_encoding,
                          cls_hidden_dims = [1024,1024,512],
                          train_epoch = 10,
                          test_every_X_epoch = 2,
+                         depth=3,
                          LR = 0.001,
                          mlp_hidden_dims_drug = [1024, 256, 64],
                          mlp_hidden_dims_target = [1024, 256, 64],
@@ -114,11 +115,11 @@ config = generate_config(drug_encoding = drug_encoding,
                          cnn_target_kernels = [4,8,12],
                          additional_info=additional_info,
                          cuda_id=0,
-                         wandb_project_name="Result",
+                         wandb_project_name="Result2",
                          wandb_project_entity="seongik-choi",
-                         hpo_results_path='/kyukon/data/gent/vo/000/gvo00048/vsc44416/hyperband/',
+                         hpo_results_path='/kyukon/data/gent/vo/000/gvo00048/vsc44416/hyperband2/',
                          rnn_target_hid_dim=64,
-                         result_folder = "/kyukon/data/gent/vo/000/gvo00048/vsc44416/result/",
+                         result_folder = "/kyukon/data/gent/vo/000/gvo00048/vsc44416/result2/",
                          use_early_stopping = True,
                         )
 
