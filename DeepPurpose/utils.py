@@ -7,6 +7,7 @@ from rdkit.Chem.rdReducedGraphs import GetErGFingerprint
 from DeepPurpose.pybiomed_helper import _GetPseudoAAC, CalculateAADipeptideComposition, \
 calcPubChemFingerAll, CalculateConjointTriad, GetQuasiSequenceOrder
 import torch
+import random
 from torch.utils import data
 from torch.autograd import Variable
 import torch.nn.functional as F
@@ -348,6 +349,74 @@ def create_fold_setting_cold_drug(df, fold_seed, frac):
 	
 	return train, val, test
 
+# cold drug & protein 
+
+def create_fold_setting_cold_drug_protein_interaction(df, fold_seed, frac):
+	train_frac, val_frac, test_frac = frac
+
+	drug_drop = data['SMILES'].drop_duplicates().sample(frac = test_frac, replace = False, random_state = fold_seed).values
+
+	gene_drop = data['Target Sequence'].drop_duplicates().sample(frac = test_frac, replace = False, random_state = fold_seed).values
+
+	drug_before_discard = data[data['SMILES'].isin(drug_drop)]
+
+	drug_index = drug_before_discard['SMILES'].drop_duplicates().index.tolist()
+
+	gene_before_discard = data[data['Target Sequence'].isin(gene_drop)]
+
+	gene_index = gene_before_discard['Target Sequence'].drop_duplicates().index.tolist()
+
+	remain_drug_test = []
+	remain_gene_test = [] 
+	remain_drug_tmp = []
+	remain_gene_tmp = [] 
+
+    	for i in range(int(len(drug_index)*0.2)+1):
+        	remain_drug_test.append(random.choice(drug_index))
+
+    	for j in range(int(len(gene_index)*0.2)+1):
+        	remain_gene_test.append(random.choice(gene_index))
+
+    	for m in range(len(remain_drug_test)):
+	        remain_drug_tmp.append(data['SMILES'][remain_drug_test[i]])
+
+    	for n in range(len(remain_gene_test)):
+        	remain_gene_tmp.append(data['Target Sequence'][remain_gene_test[j]])
+
+    	drug_test = data[data['SMILES'].isin(remain_drug_tmp)]
+
+    	gene_test = data[data['Target Sequence'].isin(remain_gene_tmp)]
+
+    	frames_test = [drug_test, gene_test]
+
+    	test = pd.concat(frames_test)
+
+
+    	train_val_drug = data[~data['SMILES'].isin(drug_drop)]
+
+    	drug_drop_val_drug = train_val_drug['SMILES'].drop_duplicates().sample(frac = val_frac/(1-test_frac), 
+        	                                                        replace = False, 
+                	                                                random_state = fold_seed).values
+    	val_drug = train_val_drug[train_val_drug['SMILES'].isin(drug_drop_val_drug)]
+    	train_drug = train_val_drug[~train_val_drug['SMILES'].isin(drug_drop_val_drug)]
+    
+    	train_val_gene = data[~data['Target Sequence'].isin(gene_drop)]
+    
+    	gene_drop_val_gene = train_val_gene['Target Sequence'].drop_duplicates().sample(frac = val_frac/(1-test_frac), 
+        	                                                                  replace = False, 
+                	                                                          random_state = fold_seed).values
+    	val_gene = train_val_gene[train_val_gene['Target Sequence'].isin(gene_drop_val_gene)]
+    	train_gene = train_val_gene[~train_val_gene['Target Sequence'].isin(gene_drop_val_gene)]
+
+    	frames_train = [train_drug, train_gene]
+
+    	frames_val = [val_drug, val_gene]
+
+    	train = pd.concat(frames_train)
+    
+    	val = pd.concat(frames_val)
+    
+    	return train, val, test
 
 def encode_drug(df_data, drug_encoding, column_name = 'SMILES', save_column_name = 'drug_encoding'):
 	print('encoding drug...')
@@ -568,6 +637,8 @@ def data_process(X_drug = None, X_target = None, y=None, drug_encoding=None, tar
 		elif split_method == 'no_split':
 			print('do not do train/test split on the data for already splitted data')
 			return df_data.reset_index(drop=True)
+		elif split_method == 'cold_drug_protein_interaction':
+			train, val, test = create_fold_setting_cold_drug_protein_interaction(df_data, random_seed, frac)
 		else:
 			raise AttributeError("Please select one of the three split method: random, cold_drug, cold_target!")
 	elif DDI_flag:
