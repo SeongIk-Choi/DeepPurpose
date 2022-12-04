@@ -391,30 +391,36 @@ def create_fold_setting_cold_drug_protein_interaction(df, fold_seed, frac):
 
     	test = pd.concat(frames_test)
 
+	train_val = data[~data['SMILES'].isin(drug_drop)]
+	
+    	train_val = train_val[~train_val['Target Sequence'].isin(gene_drop)]
 
-    	train_val_drug = data[~data['SMILES'].isin(drug_drop)]
+    	val = train_val.sample(frac = val_frac/(1-test_frac), replace = False, random_state = 1)
+ 
+    	train = train_val[~train_val.index.isin(val.index)]
+#     	train_val_drug = data[~data['SMILES'].isin(drug_drop)]
 
-    	drug_drop_val_drug = train_val_drug['SMILES'].drop_duplicates().sample(frac = val_frac/(1-test_frac), 
-        	                                                        replace = False, 
-                	                                                random_state = fold_seed).values
-    	val_drug = train_val_drug[train_val_drug['SMILES'].isin(drug_drop_val_drug)]
-    	train_drug = train_val_drug[~train_val_drug['SMILES'].isin(drug_drop_val_drug)]
+#     	drug_drop_val_drug = train_val_drug['SMILES'].drop_duplicates().sample(frac = val_frac/(1-test_frac), 
+#         	                                                        replace = False, 
+#                 	                                                random_state = fold_seed).values
+#     	val_drug = train_val_drug[train_val_drug['SMILES'].isin(drug_drop_val_drug)]
+#     	train_drug = train_val_drug[~train_val_drug['SMILES'].isin(drug_drop_val_drug)]
     
-    	train_val_gene = data[~data['Target Sequence'].isin(gene_drop)]
+#     	train_val_gene = data[~data['Target Sequence'].isin(gene_drop)]
     
-    	gene_drop_val_gene = train_val_gene['Target Sequence'].drop_duplicates().sample(frac = val_frac/(1-test_frac), 
-        	                                                                  replace = False, 
-                	                                                          random_state = fold_seed).values
-    	val_gene = train_val_gene[train_val_gene['Target Sequence'].isin(gene_drop_val_gene)]
-    	train_gene = train_val_gene[~train_val_gene['Target Sequence'].isin(gene_drop_val_gene)]
+#     	gene_drop_val_gene = train_val_gene['Target Sequence'].drop_duplicates().sample(frac = val_frac/(1-test_frac), 
+#         	                                                                  replace = False, 
+#                 	                                                          random_state = fold_seed).values
+#     	val_gene = train_val_gene[train_val_gene['Target Sequence'].isin(gene_drop_val_gene)]
+#     	train_gene = train_val_gene[~train_val_gene['Target Sequence'].isin(gene_drop_val_gene)]
 
-    	frames_train = [train_drug, train_gene]
+#     	frames_train = [train_drug, train_gene]
 
-    	frames_val = [val_drug, val_gene]
+#     	frames_val = [val_drug, val_gene]
 
-    	train = pd.concat(frames_train)
+#     	train = pd.concat(frames_train)
     
-    	val = pd.concat(frames_val)
+#     	val = pd.concat(frames_val)
     
     	return train, val, test
 
