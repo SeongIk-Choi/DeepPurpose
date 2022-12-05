@@ -96,7 +96,7 @@ if drug_encoding in MLP_drug_list or target_encoding in MLP_target_list:
 
 
 general_architecture_version='mlp'
-additional_info = {'eta': 3, 'max_budget': 81, 'cold_drug': True, 'cold_protein': False}
+additional_info = {'eta': 3, 'max_budget': 81, 'split_method': random}
 config = generate_config(drug_encoding = drug_encoding,
                          target_encoding = target_encoding,
                          general_architecture_version = general_architecture_version,
@@ -134,8 +134,7 @@ hb = HyperBand(
     eta=config['additional_info']['eta'],
     max_budget=config['additional_info']['max_budget'],
     direction='min',
-    cold_drug=config['additional_info']['cold_drug'],
-    cold_protein = config['additional_info']['cold_protein'],
+    split_method=config['additional_info']['split_method'],
     verbose=True
 )
 
