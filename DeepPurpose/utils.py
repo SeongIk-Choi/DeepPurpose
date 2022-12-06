@@ -356,11 +356,11 @@ def create_fold_setting_cold_drug_protein_interaction(df, fold_seed, frac):
 
 	drug_drop = data['SMILES'].drop_duplicates().sample(frac = test_frac, replace = False, random_state = fold_seed).values
 
-	gene_drop = data['Target Sequence'].drop_duplicates().sample(frac = test_frac, replace = False, random_state = fold_seed).values
-
 	drug_before_discard = data[data['SMILES'].isin(drug_drop)]
 
 	drug_index = drug_before_discard['SMILES'].drop_duplicates().index.tolist()
+	
+	gene_drop = data['Target Sequence'].drop_duplicates().sample(frac = test_frac, replace = False, random_state = fold_seed).values
 
 	gene_before_discard = data[data['Target Sequence'].isin(gene_drop)]
 
@@ -371,17 +371,17 @@ def create_fold_setting_cold_drug_protein_interaction(df, fold_seed, frac):
 	remain_drug_tmp = []
 	remain_gene_tmp = [] 
 
-    	for i in range(int(len(drug_index)*0.2)+1):
+    	for i in range(int(len(drug_index)*test_frac)):
         	remain_drug_test.append(random.choice(drug_index))
 
-    	for j in range(int(len(gene_index)*0.2)+1):
+    	for j in range(int(len(gene_index)*test_frac)):
         	remain_gene_test.append(random.choice(gene_index))
 
     	for m in range(len(remain_drug_test)):
-	        remain_drug_tmp.append(data['SMILES'][remain_drug_test[i]])
+	        remain_drug_tmp.append(data['SMILES'][remain_drug_test[m]])
 
     	for n in range(len(remain_gene_test)):
-        	remain_gene_tmp.append(data['Target Sequence'][remain_gene_test[j]])
+        	remain_gene_tmp.append(data['Target Sequence'][remain_gene_test[n]])
 
     	drug_test = data[data['SMILES'].isin(remain_drug_tmp)]
 
