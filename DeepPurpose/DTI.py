@@ -327,7 +327,7 @@ class DBTA:
 		
 		self.drug_encoding = drug_encoding
 		self.target_encoding = target_encoding
-		self.result_folder = config['result_folder']
+		self.result_folder = config['result_folder']+config['drug_encoding']+'_'+config['target_encoding']+'/'
 		if not os.path.exists(self.result_folder):
 			os.mkdir(self.result_folder)
 		

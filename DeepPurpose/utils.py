@@ -350,7 +350,6 @@ def create_fold_setting_cold_drug(df, fold_seed, frac):
 	return train, val, test
 
 # cold drug & protein 
-
 def create_fold_setting_cold_drug_protein_interaction(df, fold_seed, frac):
 	train_frac, val_frac, test_frac = frac
 
@@ -371,58 +370,31 @@ def create_fold_setting_cold_drug_protein_interaction(df, fold_seed, frac):
 	remain_drug_tmp = []
 	remain_gene_tmp = [] 
 
-    	for i in range(int(len(drug_index)*test_frac)):
-        	remain_drug_test.append(random.choice(drug_index))
+	for i in range(int(len(drug_index)*test_frac*2)):
+		remain_drug_test.append(random.choice(drug_index))
 
-    	for j in range(int(len(gene_index)*test_frac)):
-        	remain_gene_test.append(random.choice(gene_index))
+	for j in range(int(len(gene_index)*test_frac*2)):
+		remain_gene_test.append(random.choice(gene_index))
 
-    	for m in range(len(remain_drug_test)):
-	        remain_drug_tmp.append(data['SMILES'][remain_drug_test[m]])
+	for m in range(len(remain_drug_test)):
+		remain_drug_tmp.append(data['SMILES'][remain_drug_test[m]])
 
-    	for n in range(len(remain_gene_test)):
-        	remain_gene_tmp.append(data['Target Sequence'][remain_gene_test[n]])
+	for n in range(len(remain_gene_test)):
+		remain_gene_tmp.append(data['Target Sequence'][remain_gene_test[n]])
 
-    	drug_test = data[data['SMILES'].isin(remain_drug_tmp)]
+	drug_test = data[data['SMILES'].isin(remain_drug_tmp)]
 
-    	gene_test = data[data['Target Sequence'].isin(remain_gene_tmp)]
-
-    	frames_test = [drug_test, gene_test]
-
-    	test = pd.concat(frames_test)
-
+	test = drug_test[drug_test['Target Sequence'].isin(remain_gene_tmp)]
+	
 	train_val = data[~data['SMILES'].isin(drug_drop)]
 	
-    	train_val = train_val[~train_val['Target Sequence'].isin(gene_drop)]
+	train_val = train_val[~train_val['Target Sequence'].isin(gene_drop)]
 
-    	val = train_val.sample(frac = val_frac/(1-test_frac), replace = False, random_state = 1)
- 
-    	train = train_val[~train_val.index.isin(val.index)]
-#     	train_val_drug = data[~data['SMILES'].isin(drug_drop)]
+	val = train_val.sample(frac = val_frac/(1-test_frac), replace = False, random_state = 1)
 
-#     	drug_drop_val_drug = train_val_drug['SMILES'].drop_duplicates().sample(frac = val_frac/(1-test_frac), 
-#         	                                                        replace = False, 
-#                 	                                                random_state = fold_seed).values
-#     	val_drug = train_val_drug[train_val_drug['SMILES'].isin(drug_drop_val_drug)]
-#     	train_drug = train_val_drug[~train_val_drug['SMILES'].isin(drug_drop_val_drug)]
-    
-#     	train_val_gene = data[~data['Target Sequence'].isin(gene_drop)]
-    
-#     	gene_drop_val_gene = train_val_gene['Target Sequence'].drop_duplicates().sample(frac = val_frac/(1-test_frac), 
-#         	                                                                  replace = False, 
-#                 	                                                          random_state = fold_seed).values
-#     	val_gene = train_val_gene[train_val_gene['Target Sequence'].isin(gene_drop_val_gene)]
-#     	train_gene = train_val_gene[~train_val_gene['Target Sequence'].isin(gene_drop_val_gene)]
+	train = train_val[~train_val.index.isin(val.index)]
 
-#     	frames_train = [train_drug, train_gene]
-
-#     	frames_val = [val_drug, val_gene]
-
-#     	train = pd.concat(frames_train)
-    
-#     	val = pd.concat(frames_val)
-    
-    	return train, val, test
+	return train, val, test
 
 def encode_drug(df_data, drug_encoding, column_name = 'SMILES', save_column_name = 'drug_encoding'):
 	print('encoding drug...')
