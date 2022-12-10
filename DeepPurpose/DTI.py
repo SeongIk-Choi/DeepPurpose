@@ -262,6 +262,7 @@ class DBTA:
 
 		config['device'] = self.device
 		
+		
 		print('Using the following device: '+str(self.device))
 
 		if drug_encoding == 'Morgan' or drug_encoding == 'ErG' or drug_encoding=='Pubchem' or drug_encoding=='Daylight' or drug_encoding=='rdkit_2d_normalized' or drug_encoding == 'ESPF':
