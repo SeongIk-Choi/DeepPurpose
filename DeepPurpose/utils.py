@@ -385,7 +385,7 @@ def create_fold_setting_cold_drug_protein_interaction(df, fold_seed, frac):
 	drug_test = data[data['SMILES'].isin(remain_drug_tmp)]
 
 	test = drug_test[drug_test['Target Sequence'].isin(remain_gene_tmp)]
-	
+
 	train_val = data[~data['SMILES'].isin(drug_drop)]
 	
 	train_val = train_val[~train_val['Target Sequence'].isin(gene_drop)]
