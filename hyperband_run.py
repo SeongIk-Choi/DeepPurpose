@@ -96,7 +96,7 @@ if drug_encoding in MLP_drug_list or target_encoding in MLP_target_list:
 
 
 general_architecture_version='mlp'
-additional_info = {'eta': 3, 'max_budget': 81, 'split_method': random}
+additional_info = {'eta': 3, 'max_budget': 81, 'split_method': 'random'}
 config = generate_config(drug_encoding = drug_encoding,
                          target_encoding = target_encoding,
                          general_architecture_version = general_architecture_version,

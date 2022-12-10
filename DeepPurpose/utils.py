@@ -370,8 +370,19 @@ def create_fold_setting_cold_drug_protein_interaction(df, fold_seed, frac):
 	remain_drug_tmp = []
 	remain_gene_tmp = [] 
 
+<<<<<<< HEAD
 	for i in range(int(len(drug_index)*test_frac*2)):
 		remain_drug_test.append(random.choice(drug_index))
+=======
+    	for i in range(int(len(drug_index)*test_frac*2)):
+        	remain_drug_test.append(random.choice(drug_index))
+
+    	for j in range(int(len(gene_index)*test_frac*2)):
+        	remain_gene_test.append(random.choice(gene_index))
+
+    	for m in range(len(remain_drug_test)):
+	        remain_drug_tmp.append(data['SMILES'][remain_drug_test[m]])
+>>>>>>> f3b49dd25eea16d463d4859f9f6e21b8af86f8b2
 
 	for j in range(int(len(gene_index)*test_frac*2)):
 		remain_gene_test.append(random.choice(gene_index))
@@ -379,12 +390,16 @@ def create_fold_setting_cold_drug_protein_interaction(df, fold_seed, frac):
 	for m in range(len(remain_drug_test)):
 		remain_drug_tmp.append(data['SMILES'][remain_drug_test[m]])
 
+<<<<<<< HEAD
 	for n in range(len(remain_gene_test)):
 		remain_gene_tmp.append(data['Target Sequence'][remain_gene_test[n]])
 
 	drug_test = data[data['SMILES'].isin(remain_drug_tmp)]
 
 	test = drug_test[drug_test['Target Sequence'].isin(remain_gene_tmp)]
+=======
+    	test = drug_test[drug_test['Target Sequence'].isin(remain_gene_tmp)]
+>>>>>>> f3b49dd25eea16d463d4859f9f6e21b8af86f8b2
 
 	train_val = data[~data['SMILES'].isin(drug_drop)]
 	
