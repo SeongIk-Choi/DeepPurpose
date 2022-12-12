@@ -51,7 +51,6 @@ class MLP_Classifier(nn.Sequential):
 		# each encoding
 		v_D = self.model_drug(v_D)
 		v_P = self.model_protein(v_P)
-
 		# concatenate and classify
 		v_f = torch.cat((v_D, v_P), 1)
 		for i, l in enumerate(self.predictor):
@@ -262,7 +261,7 @@ class DBTA:
 
 		config['device'] = self.device
 		
-		
+
 		print('Using the following device: '+str(self.device))
 
 		if drug_encoding == 'Morgan' or drug_encoding == 'ErG' or drug_encoding=='Pubchem' or drug_encoding=='Daylight' or drug_encoding=='rdkit_2d_normalized' or drug_encoding == 'ESPF':
@@ -272,6 +271,8 @@ class DBTA:
 			self.model_drug = CNN('drug', **config)
 		elif drug_encoding == 'CNN_RNN':
 			self.model_drug = CNN_RNN('drug', **config)
+		elif drug_encoding == 'Conv_CNN_2D':
+			self.model_drug = Conv_CNN_2D(config['fully_layer_1'], config['fully_layer_2'], config['drop_rate'])
 		elif drug_encoding == 'Transformer':
 			self.model_drug = transformer('drug', **config)
 		elif drug_encoding == 'MPNN':
@@ -364,7 +365,8 @@ class DBTA:
 			if self.target_encoding == 'Transformer':
 				v_p = v_p
 			else:
-				v_p = v_p.float().to(self.device)                
+				v_p = v_p.float().to(self.device)
+              
 			score = self.model(v_d, v_p)
 			if self.binary:
 				m = torch.nn.Sigmoid()
@@ -499,7 +501,6 @@ class DBTA:
 				else:
 					v_d = v_d.float().to(self.device)               
 					#score = self.model(v_d, v_p.float().to(self.device))
-
 				score = self.model(v_d, v_p)
 				label = Variable(torch.from_numpy(np.array(label)).float()).to(self.device)
 				if self.binary:

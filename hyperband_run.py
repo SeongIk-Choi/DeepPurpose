@@ -13,8 +13,8 @@ from ConfigSpace import CategoricalHyperparameter
 # Generate train, val, test dataset
 X_drug, X_target, y = load_process_DAVIS('./data/', binary=False)
 
-drug_encoding = 'CNN'
-target_encoding = 'Conjoint_triad'
+drug_encoding = 'Conv_CNN_2D'
+target_encoding = 'ESPF'
 train, val, test = data_process(X_drug, X_target, y,
                                 drug_encoding, target_encoding,
                                 split_method='random',frac=[0.7,0.1,0.2])
@@ -114,13 +114,16 @@ config = generate_config(drug_encoding = drug_encoding,
                          cnn_target_filters = [32,64,96],
                          cnn_target_kernels = [4,8,12],
                          additional_info=additional_info,
-                         cuda_id=0,
+                         cuda_id=1,
                          wandb_project_name="Result2",
                          wandb_project_entity="seongik-choi",
-                         hpo_results_path='/kyukon/data/gent/vo/000/gvo00048/vsc44416/hyperband2/',
+                         hpo_results_path='/home/seongik/Thesis/hyperband/',
                          rnn_target_hid_dim=64,
-                         result_folder = "/kyukon/data/gent/vo/000/gvo00048/vsc44416/result2/",
+                         result_folder = "/home/seongik/Thesis/result/",
                          use_early_stopping = True,
+                         fully_layer_1 = 256,
+                         fully_layer_2 = 128,
+                         drop_rate = 0.25,
                         )
 
 

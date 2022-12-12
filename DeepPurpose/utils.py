@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from rdkit import Chem, DataStructs
-from rdkit.Chem import AllChem
+from rdkit.Chem import AllChem, Draw
 from rdkit.Chem.Fingerprints import FingerprintMols
 from rdkit.Chem.rdReducedGraphs import GetErGFingerprint
 from DeepPurpose.pybiomed_helper import _GetPseudoAAC, CalculateAADipeptideComposition, \
@@ -11,6 +11,12 @@ import random
 from torch.utils import data
 from torch.autograd import Variable
 import torch.nn.functional as F
+from numpy import asarray
+from PIL import Image
+from rdkit.Chem.Draw import DrawingOptions
+import cairosvg
+import subprocess
+import cv2 
 
 try:
 	from descriptastorus.descriptors import rdDescriptors, rdNormalizedDescriptors
@@ -370,19 +376,8 @@ def create_fold_setting_cold_drug_protein_interaction(df, fold_seed, frac):
 	remain_drug_tmp = []
 	remain_gene_tmp = [] 
 
-<<<<<<< HEAD
 	for i in range(int(len(drug_index)*test_frac*2)):
 		remain_drug_test.append(random.choice(drug_index))
-=======
-    	for i in range(int(len(drug_index)*test_frac*2)):
-        	remain_drug_test.append(random.choice(drug_index))
-
-    	for j in range(int(len(gene_index)*test_frac*2)):
-        	remain_gene_test.append(random.choice(gene_index))
-
-    	for m in range(len(remain_drug_test)):
-	        remain_drug_tmp.append(data['SMILES'][remain_drug_test[m]])
->>>>>>> f3b49dd25eea16d463d4859f9f6e21b8af86f8b2
 
 	for j in range(int(len(gene_index)*test_frac*2)):
 		remain_gene_test.append(random.choice(gene_index))
@@ -390,16 +385,12 @@ def create_fold_setting_cold_drug_protein_interaction(df, fold_seed, frac):
 	for m in range(len(remain_drug_test)):
 		remain_drug_tmp.append(data['SMILES'][remain_drug_test[m]])
 
-<<<<<<< HEAD
 	for n in range(len(remain_gene_test)):
 		remain_gene_tmp.append(data['Target Sequence'][remain_gene_test[n]])
 
 	drug_test = data[data['SMILES'].isin(remain_drug_tmp)]
 
 	test = drug_test[drug_test['Target Sequence'].isin(remain_gene_tmp)]
-=======
-    	test = drug_test[drug_test['Target Sequence'].isin(remain_gene_tmp)]
->>>>>>> f3b49dd25eea16d463d4859f9f6e21b8af86f8b2
 
 	train_val = data[~data['SMILES'].isin(drug_drop)]
 	
@@ -461,6 +452,11 @@ def encode_drug(df_data, drug_encoding, column_name = 'SMILES', save_column_name
 		df_data[save_column_name] = df_data[column_name]
 	elif drug_encoding in ['DGL_GIN_AttrMasking', 'DGL_GIN_ContextPred']:
 		df_data[save_column_name] = df_data[column_name]
+	elif drug_encoding == 'Conv_CNN_2D':
+		img_generate = pd.Series(df_data[column_name].unique()).apply(imgsave)
+		unique = pd.Series(df_data[column_name].unique()).apply(img2vec)
+		unique_dict = dict(zip(df_data[column_name].unique(), unique))
+		df_data[save_column_name] = [unique_dict[i] for i in df_data[column_name]]
 	else:
 		raise AttributeError("Please use the correct drug encoding available!")
 	return df_data
@@ -715,15 +711,18 @@ class data_process_loader(data.Dataset):
 	def __getitem__(self, index):
 		'Generates one sample of data'
 		index = self.list_IDs[index]
-		v_d = self.df.iloc[index]['drug_encoding']        
+		v_d = self.df.iloc[index]['drug_encoding']
+
 		if self.config['drug_encoding'] == 'CNN' or self.config['drug_encoding'] == 'CNN_RNN':
 			v_d = drug_2_embed(v_d)
+
 		elif self.config['drug_encoding'] in ['DGL_GCN', 'DGL_NeuralFP', 'DGL_GIN_AttrMasking', 'DGL_GIN_ContextPred', 'DGL_AttentiveFP']:
 			v_d = self.fc(smiles = v_d, node_featurizer = self.node_featurizer, edge_featurizer = self.edge_featurizer)
 		v_p = self.df.iloc[index]['target_encoding']
 		if self.config['target_encoding'] == 'CNN' or self.config['target_encoding'] == 'CNN_RNN':
 			v_p = protein_2_embed(v_p)
 		y = self.labels[index]
+
 		return v_d, v_p, y
 
 
@@ -931,6 +930,9 @@ def generate_config(drug_encoding = None, target_encoding = None,
 					metric_to_optimize_best_epoch_selection = 'loss',
                     hpo_results_path = './',
                     additional_info = {},
+					fully_layer_1 = 256,
+					fully_layer_2 = 128,
+					drop_rate = 0.25,
 					):
 
 	base_config = {'input_dim_drug': input_dim_drug,
@@ -962,6 +964,9 @@ def generate_config(drug_encoding = None, target_encoding = None,
 					'metric_to_optimize_best_epoch_selection': metric_to_optimize_best_epoch_selection,
                     'additional_info': additional_info,
                     'hpo_results_path': hpo_results_path,
+					'fully_layer_1': fully_layer_1,
+					'fully_layer_2': fully_layer_2,
+					'drop_rate' : drop_rate,
 
 	}
 	if not os.path.exists(base_config['result_folder']):
@@ -1031,8 +1036,15 @@ def generate_config(drug_encoding = None, target_encoding = None,
 		base_config['gnn_hid_dim_drug'] = gnn_hid_dim_drug
 		base_config['gnn_num_layers'] = gnn_num_layers
 		base_config['attentivefp_num_timesteps'] = attentivefp_num_timesteps
+	
+	elif drug_encoding == "Conv_CNN_2D":
+		base_config['fully_layer_1'] = fully_layer_1
+		base_config['fully_layer_2'] = fully_layer_2
+		base_config['drop_rate'] = drop_rate
+		base_config['hidden_dim_drug'] = 2 # number of output node from Conv_CNN_2D in encoder.py
 	elif drug_encoding is None:
 		pass
+	
 	else:
 		raise AttributeError("Please use the correct drug encoding available!")
 
@@ -1072,6 +1084,7 @@ def generate_config(drug_encoding = None, target_encoding = None,
 		base_config['hidden_dim_protein'] = transformer_emb_size_target
 	elif target_encoding is None:
 		pass
+
 	else:
 		raise AttributeError("Please use the correct protein encoding available!")
 
@@ -1200,6 +1213,34 @@ def trans_drug(x):
 	else:
 		temp = temp [:MAX_SEQ_DRUG]
 	return temp
+
+def imgsave(x, image_path='./Image/DAVIS') :
+	IMG_SIZE = 200
+	if not os.path.exists(image_path):
+		os.mkdir(image_path)
+	mol = Chem.MolFromSmiles(x)
+	DrawingOptions.atomLabelFontSize = 55
+	DrawingOptions.dotsPerAngstrom = 100
+	DrawingOptions.bondLineWidth = 1.5
+	# Remove svg to png format because one SMILES contain "#" sign that cannot be used as url. 
+	Draw.MolToFile(mol, os.path.join(image_path, "{}.png".format(x)), size= ( IMG_SIZE , IMG_SIZE ))
+
+def img2vec(x, image_path='./Image/DAVIS'):
+	img_path = os.path.join(image_path, "{}.png".format(x))
+	img_arr = cv2.imread(img_path)
+	if random.random()>=0.50:
+		angle = random.randint(0,359)
+		rows, cols, channel = img_arr.shape
+		rotation_matrix = cv2.getRotationMatrix2D((cols / 2, rows / 2), angle, 1)
+		img_arr = cv2.warpAffine(img_arr, rotation_matrix, (cols, rows), cv2.INTER_LINEAR,
+												borderValue=(255, 255, 255))  # cv2.BORDER_CONSTANT, 255)
+
+	img_arr = np.array(img_arr) / 255.0
+	img_arr = img_arr.transpose((2, 0, 1))
+
+	return img_arr
+
+
 
 def drug_2_embed(x):
 	return enc_drug.transform(np.array(x).reshape(-1,1)).toarray().T    
