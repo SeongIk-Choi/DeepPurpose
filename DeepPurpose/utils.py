@@ -378,12 +378,14 @@ def create_fold_setting_cold_drug_protein_interaction(df, fold_seed, frac):
 
 	for i in range(int(len(drug_index)*test_frac*2)):
 		remain_drug_test.append(random.choice(drug_index))
+    for i in range(int(len(drug_index)*test_frac*2)):
+        remain_drug_test.append(random.choice(drug_index))
 
 	for j in range(int(len(gene_index)*test_frac*2)):
 		remain_gene_test.append(random.choice(gene_index))
 
-	for m in range(len(remain_drug_test)):
-		remain_drug_tmp.append(data['SMILES'][remain_drug_test[m]])
+    	for m in range(len(remain_drug_test)):
+	        remain_drug_tmp.append(data['SMILES'][remain_drug_test[m]])
 
 	for n in range(len(remain_gene_test)):
 		remain_gene_tmp.append(data['Target Sequence'][remain_gene_test[n]])
