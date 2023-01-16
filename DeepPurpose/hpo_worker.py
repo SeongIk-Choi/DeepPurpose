@@ -79,18 +79,22 @@ class BaseWorker:
         final_config.update({'num_epochs': int(budget), 'actuall_budget': int(budget), 'train_epoch': int(budget)})
         final_config.update(temp_config) # It updates all of the dictionary value that has same keys between tmp_config and current config. 
         if final_config['general_architecture_version'] == 'mlp' :
-            if final_config['drug_encoding'].startswith('CNN') or final_config['target_encoding'].startswith('CNN') :
+            if final_config['drug_encoding'].startswith('CNN'):
                 for i in range (int(final_config['depth'])):
                     CNN_drug_filters.append(int(temp_config['cnn_drug_filter_number'])*(i+1))
                     CNN_drug_kernels.append(int(temp_config['cnn_drug_kernel_number'])*(i+1))
+                final_config.update({'cnn_drug_filters': CNN_drug_filters, 'cnn_drug_kernels': CNN_drug_kernels})
+
+            if final_config['target_encoding'].startswith('CNN') :
+                for i in range (int(final_config['depth'])):
                     CNN_target_filters.append(int(temp_config['cnn_target_filter_number'])*(i+1))
                     CNN_target_kernels.append(int(temp_config['cnn_target_kernel_number'])*(i+1))
-
+                
                 #update_cnn_drug_filters = [int(temp_config['cnn_drug_filter_number']), int(temp_config['cnn_drug_filter_number'])*2, int(temp_config['cnn_drug_filter_number'])*3]
                 #update_cnn_drug_kernels = [int(temp_config['cnn_drug_kernel_number']), int(temp_config['cnn_drug_kernel_number'])*2, int(temp_config['cnn_drug_kernel_number'])*3]
                 #update_cnn_target_filters = [int(temp_config['cnn_target_filter_number']), int(temp_config['cnn_target_filter_number'])*2, int(temp_config['cnn_target_filter_number'])*3]
                 #update_cnn_target_kernels = [int(temp_config['cnn_target_kernel_number']), int(temp_config['cnn_target_kernel_number'])*2, int(temp_config['cnn_target_kernel_number'])*3]
-                final_config.update({'cnn_drug_filters': CNN_drug_filters, 'cnn_drug_kernels': CNN_drug_kernels, 'cnn_target_filters':CNN_target_filters, 'cnn_target_kernels': CNN_target_kernels})
+                final_config.update({'cnn_target_filters':CNN_target_filters, 'cnn_target_kernels': CNN_target_kernels})
 
             if final_config['drug_encoding'] in MLP_drug_list or final_config['target_encoding'] in MLP_target_list :
                 mlp_hidden_dim_drug.append(int(temp_config['mlp_hidden_dim_drug_number']))                    

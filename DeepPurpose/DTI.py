@@ -52,6 +52,7 @@ class MLP_Classifier(nn.Sequential):
 		v_D = self.model_drug(v_D)
 		v_P = self.model_protein(v_P)
 		# concatenate and classify
+
 		v_f = torch.cat((v_D, v_P), 1)
 		for i, l in enumerate(self.predictor):
 			if i==(len(self.predictor)-1):
@@ -272,7 +273,7 @@ class DBTA:
 		elif drug_encoding == 'CNN_RNN':
 			self.model_drug = CNN_RNN('drug', **config)
 		elif drug_encoding == 'Conv_CNN_2D':
-			self.model_drug = Conv_CNN_2D(config['fully_layer_1'], config['fully_layer_2'], config['drop_rate'])
+			self.model_drug = Conv_CNN_2D(config['fully_layer_1'], config['fully_layer_2'], config['drop_rate'], config['batch_size'], config['filter'])
 		elif drug_encoding == 'Transformer':
 			self.model_drug = transformer('drug', **config)
 		elif drug_encoding == 'MPNN':
@@ -400,6 +401,7 @@ class DBTA:
 			return mean_squared_error(y_label, y_pred), pearsonr(y_label, y_pred)[0], pearsonr(y_label, y_pred)[1], concordance_index(y_label, y_pred), y_pred, loss
 
 	def train(self, train, val = None, test = None, verbose = True):
+		torch.cuda.empty_cache()
 		if len(train.Label.unique()) == 2:
 			self.binary = True
 			self.config['binary'] = True
@@ -651,7 +653,7 @@ class DBTA:
 			self.wandb_run.finish()
 
 		return val_loss_list
-
+		
 	def predict(self, df_data):
 		'''
 			utils.data_process_repurpose_virtual_screening 

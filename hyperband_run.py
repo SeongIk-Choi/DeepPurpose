@@ -14,31 +14,59 @@ from ConfigSpace import CategoricalHyperparameter
 X_drug, X_target, y = load_process_DAVIS('./data/', binary=False)
 
 drug_encoding = 'Conv_CNN_2D'
-target_encoding = 'ESPF'
+target_encoding = 'CNN_RNN'
 train, val, test = data_process(X_drug, X_target, y,
                                 drug_encoding, target_encoding,
                                 split_method='random',frac=[0.7,0.1,0.2])
 
 MLP_drug_list = ['Morgan', 'ErG', 'Pubchem', 'Daylight', 'rdkit_2d_normalized', 'ESPF'] 
-MLP_target_list = ['ACC', 'Pseudo AAC', 'Conjoint_triad', 'Quasi-seq', 'ESPF']
+MLP_target_list = ['AAC', 'PseudoAAC', 'Conjoint_triad', 'Quasi-seq', 'ESPF']
 # define the configuration space
 cs= CS.ConfigurationSpace()
 
 LR= CSH.UniformFloatHyperparameter("LR", lower=1e-6, upper=1e-3, default_value=1e-3, log=True)
 cls_hidden_dim_number = CSH.UniformIntegerHyperparameter("cls_hidden_dim_number", lower=4, upper=1024, default_value=1024, log=False)
+batch_size = CSH.CategoricalHyperparameter("batch_size", [32,64,128,256])
 depth = CSH.UniformIntegerHyperparameter("depth", lower=1, upper=4, default_value=3, log=False)
-cs.add_hyperparameters([LR, cls_hidden_dim_number, depth,])
+cs.add_hyperparameters([LR, cls_hidden_dim_number, batch_size, depth,])
 
-if drug_encoding == 'CNN' or target_encoding == 'CNN':
+if drug_encoding.startswith('CNN') :
     cnn_drug_filter_number = CSH.UniformIntegerHyperparameter("cnn_drug_filter_number", lower=4, upper=64, default_value=32, log=False)
 
     cnn_drug_kernel_number = CSH.UniformIntegerHyperparameter("cnn_drug_kernel_number", lower=2, upper=8, default_value=4, log=False)
 
+    if drug_encoding == 'CNN_RNN' :
+        rnn_drug_hid_dim=CSH.UniformIntegerHyperparameter("rnn_drug_hid_dim", lower=2, upper=516, default_value=64, log=False)
+        rnn_drug_n_layers = CSH.UniformIntegerHyperparameter("rnn_drug_n_layers", lower=1, upper=2, default_value=2, log=False)
+        hidden_dim_drug=CSH.UniformIntegerHyperparameter("hidden_dim_drug", lower=8, upper=516, default_value=128, log=False)
+        cs.add_hyperparameters([cnn_drug_filter_number, cnn_drug_kernel_number, rnn_drug_hid_dim, rnn_drug_n_layers, hidden_dim_drug,])
+    else:
+        cs.add_hyperparameters([cnn_drug_filter_number, cnn_drug_kernel_number,])
+
+
+if target_encoding.startswith('CNN'):
     cnn_target_filter_number = CSH.UniformIntegerHyperparameter("cnn_target_filter_number", lower=4, upper=64, default_value=32, log=False)
 
     cnn_target_kernel_number = CSH.UniformIntegerHyperparameter("cnn_target_kernel_number", lower=2, upper=8, default_value=4, log=False)
+    if target_encoding == 'CNN_RNN' :
+        rnn_target_hid_dim=CSH.UniformIntegerHyperparameter("rnn_target_hid_dim", lower=2, upper=516, default_value=64, log=False)
 
-    cs.add_hyperparameters([cnn_drug_filter_number, cnn_drug_kernel_number, cnn_target_filter_number, cnn_target_kernel_number,])
+        rnn_target_n_layers = CSH.UniformIntegerHyperparameter("rnn_target_n_layers", lower=1, upper=2, default_value=2, log=False)
+        cs.add_hyperparameters([cnn_target_filter_number, cnn_target_kernel_number, rnn_target_hid_dim, rnn_target_n_layers,])
+    else:
+        cs.add_hyperparameters([cnn_target_filter_number, cnn_target_kernel_number,])
+
+
+# if drug_encoding == 'CNN' or target_encoding == 'CNN':
+#     cnn_drug_filter_number = CSH.UniformIntegerHyperparameter("cnn_drug_filter_number", lower=4, upper=64, default_value=32, log=False)
+
+#     cnn_drug_kernel_number = CSH.UniformIntegerHyperparameter("cnn_drug_kernel_number", lower=2, upper=8, default_value=4, log=False)
+
+#     cnn_target_filter_number = CSH.UniformIntegerHyperparameter("cnn_target_filter_number", lower=4, upper=64, default_value=32, log=False)
+
+#     cnn_target_kernel_number = CSH.UniformIntegerHyperparameter("cnn_target_kernel_number", lower=2, upper=8, default_value=4, log=False)
+
+#     cs.add_hyperparameters([cnn_drug_filter_number, cnn_drug_kernel_number, cnn_target_filter_number, cnn_target_kernel_number,])
 
 if drug_encoding =='Transformer' or target_encoding == 'Transformer': 
     transformer_emb_size_drug= CSH.UniformIntegerHyperparameter("transformer_emb_size_drug", lower=1, upper=4, default_value=2, log=False)
@@ -57,15 +85,15 @@ if drug_encoding =='Transformer' or target_encoding == 'Transformer':
     cs.add_hyperparameters([transformer_emb_size_drug, transformer_emb_size_target, transformer_intermediate_size_drug, transformer_intermediate_size_target, transformer_n_layer_drug,
     transformer_n_layer_target, transformer_dropout_rate, hidden_dim_drug, hidden_dim_protein,])
 
-if drug_encoding == 'CNN_RNN' or target_encoding == 'CNN_RNN' :     
-    rnn_drug_hid_dim=CSH.UniformIntegerHyperparameter("rnn_drug_hid_dim", lower=2, upper=516, default_value=64, log=False)
-    rnn_target_hid_dim=CSH.UniformIntegerHyperparameter("rnn_target_hid_dim", lower=2, upper=516, default_value=64, log=False)
+# if drug_encoding == 'CNN_RNN' or target_encoding == 'CNN_RNN' :     
+#     rnn_drug_hid_dim=CSH.UniformIntegerHyperparameter("rnn_drug_hid_dim", lower=2, upper=516, default_value=64, log=False)
+#     rnn_target_hid_dim=CSH.UniformIntegerHyperparameter("rnn_target_hid_dim", lower=2, upper=516, default_value=64, log=False)
 
-    rnn_drug_n_layers = CSH.UniformIntegerHyperparameter("rnn_drug_n_layers", lower=1, upper=4, default_value=2, log=False)
-    rnn_target_n_layers = CSH.UniformIntegerHyperparameter("rnn_target_n_layers", lower=1, upper=4, default_value=2, log=False)
-    hidden_dim_drug=CSH.UniformIntegerHyperparameter("hidden_dim_drug", lower=8, upper=2048, default_value=128, log=False)
+#     rnn_drug_n_layers = CSH.UniformIntegerHyperparameter("rnn_drug_n_layers", lower=1, upper=2, default_value=2, log=False)
+#     rnn_target_n_layers = CSH.UniformIntegerHyperparameter("rnn_target_n_layers", lower=1, upper=2, default_value=2, log=False)
+#     hidden_dim_drug=CSH.UniformIntegerHyperparameter("hidden_dim_drug", lower=8, upper=516, default_value=128, log=False)
 
-    cs.add_hyperparameters([rnn_drug_hid_dim, rnn_target_hid_dim, rnn_drug_n_layers, rnn_target_n_layers, hidden_dim_drug,])
+#     cs.add_hyperparameters([rnn_drug_hid_dim, rnn_target_hid_dim, rnn_drug_n_layers, rnn_target_n_layers, hidden_dim_drug,])
 
 
 if drug_encoding == 'MPNN' : 
@@ -94,6 +122,9 @@ if drug_encoding in MLP_drug_list or target_encoding in MLP_target_list:
 
     cs.add_hyperparameters([mlp_hidden_dim_drug_number, mlp_hidden_dim_target_number,])
 
+if drug_encoding == 'Conv_CNN_2D' : 
+    filter = CSH.CategoricalHyperparameter("filter", [8,16,32,64])
+    cs.add_hyperparameters([filter,])
 
 general_architecture_version='mlp'
 additional_info = {'eta': 3, 'max_budget': 81, 'split_method': 'random'}
@@ -114,12 +145,12 @@ config = generate_config(drug_encoding = drug_encoding,
                          cnn_target_filters = [32,64,96],
                          cnn_target_kernels = [4,8,12],
                          additional_info=additional_info,
-                         cuda_id=1,
-                         wandb_project_name="Result2",
+                         cuda_id=0,
+                         wandb_project_name="Final",
                          wandb_project_entity="seongik-choi",
-                         hpo_results_path='/home/seongik/Thesis/hyperband/',
+                         hpo_results_path='/kyukon/data/gent/vo/000/gvo00048/vsc44416/hyperband/',
                          rnn_target_hid_dim=64,
-                         result_folder = "/home/seongik/Thesis/result/",
+                         result_folder = "/kyukon/data/gent/vo/000/gvo00048/vsc44416/result/",
                          use_early_stopping = True,
                          fully_layer_1 = 256,
                          fully_layer_2 = 128,

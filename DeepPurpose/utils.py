@@ -378,14 +378,14 @@ def create_fold_setting_cold_drug_protein_interaction(df, fold_seed, frac):
 
 	for i in range(int(len(drug_index)*test_frac*2)):
 		remain_drug_test.append(random.choice(drug_index))
-    for i in range(int(len(drug_index)*test_frac*2)):
-        remain_drug_test.append(random.choice(drug_index))
+	for i in range(int(len(drug_index)*test_frac*2)):
+		remain_drug_test.append(random.choice(drug_index))
 
 	for j in range(int(len(gene_index)*test_frac*2)):
 		remain_gene_test.append(random.choice(gene_index))
 
-    	for m in range(len(remain_drug_test)):
-	        remain_drug_tmp.append(data['SMILES'][remain_drug_test[m]])
+	for m in range(len(remain_drug_test)):
+		remain_drug_tmp.append(data['SMILES'][remain_drug_test[m]])
 
 	for n in range(len(remain_gene_test)):
 		remain_gene_tmp.append(data['Target Sequence'][remain_gene_test[n]])
@@ -935,6 +935,7 @@ def generate_config(drug_encoding = None, target_encoding = None,
 					fully_layer_1 = 256,
 					fully_layer_2 = 128,
 					drop_rate = 0.25,
+					filter = 32, 
 					):
 
 	base_config = {'input_dim_drug': input_dim_drug,
@@ -969,6 +970,8 @@ def generate_config(drug_encoding = None, target_encoding = None,
 					'fully_layer_1': fully_layer_1,
 					'fully_layer_2': fully_layer_2,
 					'drop_rate' : drop_rate,
+					'batch_size' : batch_size,
+					'filter': filter, 
 
 	}
 	if not os.path.exists(base_config['result_folder']):
@@ -1043,7 +1046,9 @@ def generate_config(drug_encoding = None, target_encoding = None,
 		base_config['fully_layer_1'] = fully_layer_1
 		base_config['fully_layer_2'] = fully_layer_2
 		base_config['drop_rate'] = drop_rate
-		base_config['hidden_dim_drug'] = 2 # number of output node from Conv_CNN_2D in encoder.py
+		base_config['batch_size'] = batch_size
+		base_config['filter'] = filter
+		base_config['hidden_dim_drug'] = 68 # number of output node from Conv_CNN_2D in encoder.py
 	elif drug_encoding is None:
 		pass
 	
