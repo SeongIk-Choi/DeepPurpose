@@ -52,7 +52,6 @@ class MLP_Classifier(nn.Sequential):
 		v_D = self.model_drug(v_D)
 		v_P = self.model_protein(v_P)
 		# concatenate and classify
-
 		v_f = torch.cat((v_D, v_P), 1)
 		for i, l in enumerate(self.predictor):
 			if i==(len(self.predictor)-1):
@@ -283,7 +282,8 @@ class DBTA:
 									hidden_feats = [config['gnn_hid_dim_drug']] * config['gnn_num_layers'], 
 									activation = [config['gnn_activation']] * config['gnn_num_layers'], 
 									predictor_dim = config['hidden_dim_drug'],
-									device = config['device'])
+									device = config['device'],
+			 						encoding_checker = config['target_encoding'])
 		elif drug_encoding == 'DGL_NeuralFP':
 			self.model_drug = DGL_NeuralFP(in_feats = 74, 
 									hidden_feats = [config['gnn_hid_dim_drug']] * config['gnn_num_layers'], 
@@ -308,7 +308,7 @@ class DBTA:
 		else:
 			raise AttributeError('Please use one of the available encoding method.')
 
-		if target_encoding == 'AAC' or target_encoding == 'PseudoAAC' or  target_encoding == 'Conjoint_triad' or target_encoding == 'Quasi-seq' or target_encoding == 'ESPF':
+		if target_encoding == 'AAC' or target_encoding == 'PseudoAAC' or  target_encoding == 'Conjoint_triad' or target_encoding == 'Quasi-seq':
 			self.model_protein = MLP(config['input_dim_protein'], config['hidden_dim_protein'], config['mlp_hidden_dims_target'], device = config['device'])
 		elif target_encoding == 'CNN':
 			self.model_protein = CNN('protein', **config)
@@ -316,6 +316,10 @@ class DBTA:
 			self.model_protein = CNN_RNN('protein', **config)
 		elif target_encoding == 'Transformer':
 			self.model_protein = transformer('protein', **config)
+		elif target_encoding[:4] == 'esm2' : 
+			self.model_protein = MLP(config['input_dim_protein'], config['hidden_dim_protein'], config['mlp_hidden_dims_target'], device = config['device'])
+			#self.model_protein = ESMFold(config['device'])
+			#self.model_protein = ESMFold(config['model_location'], config['fasta_file'], config['output_dir'], config['repr_layers'], config['include'],device = config['device'])
 		else:
 			raise AttributeError('Please use one of the available encoding method.')
 		
@@ -357,6 +361,7 @@ class DBTA:
 	def test_(self, data_generator, model, repurposing_mode = False, test = False):
 		y_pred = []
 		y_label = []
+		loss_history = []
 		model.eval()
 		for i, (v_d, v_p, label) in enumerate(data_generator):
 			if self.drug_encoding in ["MPNN", 'Transformer', 'DGL_GCN', 'DGL_NeuralFP', 'DGL_GIN_AttrMasking', 'DGL_GIN_ContextPred', 'DGL_AttentiveFP']:
@@ -376,6 +381,7 @@ class DBTA:
 				loss_fct = torch.nn.MSELoss()
 				n = torch.squeeze(score, 1)
 				loss = loss_fct(n, Variable(torch.from_numpy(np.array(label)).float()).to(self.device))
+				loss_history.append(loss.item())
 				logits = torch.squeeze(score).detach().cpu().numpy()
 			label_ids = label.to('cpu').numpy()
 			y_label = y_label + label_ids.flatten().tolist()
@@ -398,10 +404,9 @@ class DBTA:
 		else:
 			if repurposing_mode:
 				return y_pred
-			return mean_squared_error(y_label, y_pred), pearsonr(y_label, y_pred)[0], pearsonr(y_label, y_pred)[1], concordance_index(y_label, y_pred), y_pred, loss
-
+			#return mean_squared_error(y_label, y_pred), pearsonr(y_label, y_pred)[0], pearsonr(y_label, y_pred)[1], concordance_index(y_label, y_pred), y_pred, loss
+			return mean_squared_error(y_label, y_pred), pearsonr(y_label, y_pred)[0], pearsonr(y_label, y_pred)[1], concordance_index(y_label, y_pred), y_pred, np.mean(loss_history)
 	def train(self, train, val = None, test = None, verbose = True):
-		torch.cuda.empty_cache()
 		if len(train.Label.unique()) == 2:
 			self.binary = True
 			self.config['binary'] = True
@@ -492,6 +497,8 @@ class DBTA:
 		writer = SummaryWriter()
 		t_start = time() 
 		iteration_loss = 0
+		mse_list = []
+		max_val_loss = 1000
 		for epo in range(train_epoch):
 			for i, (v_d, v_p, label) in enumerate(training_generator):
 				if self.target_encoding == 'Transformer':
@@ -556,11 +563,14 @@ class DBTA:
 						mse, r2, p_val, CI, logits, loss_val = self.test_(validation_generator, self.model)
 						lst = ["epoch " + str(epo)] + list(map(float2str,[mse, r2, p_val, CI]))
 						valid_metric_record.append(lst)
-						if mse < max_MSE:
+						if loss_val.item() < max_val_loss:
 							model_max = copy.deepcopy(self.model)
-							max_MSE = mse
+							#max_MSE = mse
+							max_val_loss = loss_val.item()
+							mse_list.append(mse)
 							best_val_metrics_dict = {'val_MSE': mse, 'val_pearson_correlation': r2, 'val_concordance_index': CI, 'val_loss': loss_val.item()}
 							val_loss_list.append(best_val_metrics_dict['val_loss'])
+							#print("val_loss_list확인", val_loss_list)
 						if verbose:
 							print('Validation at Epoch '+ str(epo + 1) + ' with loss:' + str(loss_val.item())[:7] +', MSE: ' + str(mse)[:7] + ' , Pearson Correlation: '\
 							 + str(r2)[:7] + ' with p-value: ' + str(f"{p_val:.2E}") +' , Concordance Index: '+str(CI)[:7])
@@ -653,7 +663,8 @@ class DBTA:
 			self.wandb_run.finish()
 
 		return val_loss_list
-		
+	torch.cuda.empty_cache()
+
 	def predict(self, df_data):
 		'''
 			utils.data_process_repurpose_virtual_screening 

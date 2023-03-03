@@ -25,6 +25,9 @@ import os
 from DeepPurpose.utils import *
 from DeepPurpose.model_helper import Encoder_MultipleLayers, Embeddings    
 
+#import esm
+#from DeepPurpose.esm_module import ContactPredictionHead, ESM1bLayerNorm, RobertaLMHead, TransformerLayer
+
 # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class transformer(nn.Sequential):
@@ -238,7 +241,7 @@ class MLP(nn.Sequential):
 
 		for i, l in enumerate(self.predictor):
 			v = F.relu(l(v))
-			
+
 		return v  
 
 class MPNN(nn.Sequential):
@@ -318,7 +321,7 @@ class MPNN(nn.Sequential):
 
 class DGL_GCN(nn.Module):
 	## adapted from https://github.com/awslabs/dgl-lifesci/blob/2fbf5fd6aca92675b709b6f1c3bc3c6ad5434e96/python/dgllife/model/model_zoo/gcn_predictor.py#L16
-	def __init__(self, in_feats, hidden_feats=None, activation=None, predictor_dim=None, device='cpu'):
+	def __init__(self, in_feats, hidden_feats=None, activation=None, predictor_dim=None, device='cpu', encoding_checker = None):
 		super(DGL_GCN, self).__init__()
 		from dgllife.model.gnn.gcn import GCN
 		from dgllife.model.readout.weighted_sum_and_max import WeightedSumAndMax
@@ -330,13 +333,19 @@ class DGL_GCN(nn.Module):
 		gnn_out_feats = self.gnn.hidden_feats[-1]
 		self.readout = WeightedSumAndMax(gnn_out_feats)
 		self.transform = nn.Linear(self.gnn.hidden_feats[-1] * 2, predictor_dim)
-
+		self.encoding_checker = encoding_checker
 	def forward(self, bg):
 		bg = bg.to(self.device)
 		feats = bg.ndata.pop('h') 
 		node_feats = self.gnn(bg, feats)
 		graph_feats = self.readout(bg, node_feats)
-		return self.transform(graph_feats)
+		if self.encoding_checker == 'Transformer': 
+			print(self.encoding_checker)
+			output = self.transform(graph_feats).reshape(-1,2)
+		else : 
+			print(self.encoding_checker)
+			output = self.transform(graph_feats)
+		return output
 
 class DGL_NeuralFP(nn.Module):
 	## adapted from https://github.com/awslabs/dgl-lifesci/blob/2fbf5fd6aca92675b709b6f1c3bc3c6ad5434e96/python/dgllife/model/model_zoo/gat_predictor.py
@@ -502,6 +511,7 @@ class Conv_CNN_2D(nn.Sequential):
 		self.drop_rate = drop_rate
 		self.batch_size = batch_size
 		self.filter = filter
+		#self.conv_depth = conv_depth
 		self.conv1 = nn.Conv2d(3, filter, 2)
 		self.bn1 = nn.BatchNorm2d(filter)
 		self.conv2 = nn.Conv2d(filter, filter*2, 2)
@@ -515,6 +525,7 @@ class Conv_CNN_2D(nn.Sequential):
 		self.pool = nn.MaxPool2d(2, 2) 
 		#print(self.conv5.weight.shape[-1])
 		self.fc1 = nn.Linear(int(filter)*5*5, fully_layer_1)
+		#self.fc1 = nn.Linear(int(filter)*24*24, fully_layer_1) # used for 3 layers. (depth = 3)
 		#self.fc1 = nn.Linear(cnn2d_batch*5*5, fully_layer_1)
 		self.fc2 = nn.Linear(fully_layer_1, fully_layer_2)
 		self.fc3 = nn.Linear(fully_layer_2, 68) # number of unique drugs
@@ -539,9 +550,42 @@ class Conv_CNN_2D(nn.Sequential):
 		#print(x.size())
 		#x.[0] = self.batch_size
 		x = x.view(-1, self.filter*5*5) # What this is doing here exactly is changing x to a vector with self.num_flat_features(x) elements (the size of the first dimension is inferred to be 1.)
+		#x = x.view(-1, self.filter*24*24) # What this is doing here exactly is changing x to a vector with self.num_flat_features(x) elements (the size of the first dimension is inferred to be 1.)
+
 		#x = x.view(-1, self.cnn2d_batch*5*5) # What this is doing here exactly is changing x to a vector with self.num_flat_features(x) elements (the size of the first dimension is inferred to be 1.)
 		x = F.dropout(F.relu(self.fc1(x)), self.drop_rate)
 		x = F.dropout(F.relu(self.fc2(x)), self.drop_rate)
 		x = self.fc3(x)
 		#print(x.size())
 		return x
+
+# class ESMFold(nn.Module):
+# 	def __init__(self, device):
+# 		super(ESMFold, self).__init__()
+# 		self.device = device
+
+# 	def forward(self, x):
+# 		x = x.to(self.device)                
+# 		return x
+	
+
+class ESMFold(nn.Sequential):
+	def __init__(self, input_dim, output_dim, hidden_dims_lst, device):
+		'''
+			input_dim (int)
+			output_dim (int)
+			hidden_dims_lst (list, each element is a integer, indicating the hidden size)
+		'''
+		super(MLP, self).__init__()
+		self.device = device
+		layer_size = len(hidden_dims_lst) + 1
+		dims = [input_dim] + hidden_dims_lst + [output_dim]
+
+		self.predictor = nn.ModuleList([nn.Linear(dims[i], dims[i+1]) for i in range(layer_size)])
+
+	def forward(self, v):
+		# predict
+		v = v.float().to(self.device)
+		for i, l in enumerate(self.predictor):
+			v = F.relu(l(v))
+		return v  

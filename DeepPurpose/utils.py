@@ -32,6 +32,8 @@ import os
 import sys
 import pathlib
 
+from esm import Alphabet, FastaBatchedDataset, ProteinBertModel, pretrained, MSATransformer
+
 this_dir = str(pathlib.Path(__file__).parent.absolute())
 
 MAX_ATOM = 600
@@ -486,6 +488,13 @@ def encode_protein(df_data, target_encoding, column_name = 'Target Sequence', sa
 		AA = pd.Series(df_data[column_name].unique()).apply(target2quasi)
 		AA_dict = dict(zip(df_data[column_name].unique(), AA))
 		df_data[save_column_name] = [AA_dict[i] for i in df_data[column_name]]
+		#test = "LKMNKLPSNRGNTLREVQLMNRLRHPNILRFMGVCVHQGQLHALTEYMNGGTLEXLLSSPEPLSWPVRLHLALDIARGLRYLHSKGVFHRDLTSKNCLVRREDRGFTAVVGDFGLAEKIPVYREGARKEPLAVVGSPYWMAPEVLRGELYDEKADVFAFGIVLCELIARVPADPDYLPRTEDFGLDVPAFRTLVGDDCPLPFLLLAIHCCNLEPSTRAPFTEITQHLEWILEQLPEPAPLTXTA"
+		#count = 0 
+		#for i in (df_data[column_name]):
+		#	if i == test: 
+		#		count += 1 	
+		#print(count)
+		#raise AttributeError ("stop")
 	elif target_encoding == 'ESPF':
 		AA = pd.Series(df_data[column_name].unique()).apply(protein2espf)
 		AA_dict = dict(zip(df_data[column_name].unique(), AA))
@@ -503,6 +512,44 @@ def encode_protein(df_data, target_encoding, column_name = 'Target Sequence', sa
 		AA = pd.Series(df_data[column_name].unique()).apply(protein2emb_encoder)
 		AA_dict = dict(zip(df_data[column_name].unique(), AA))
 		df_data[save_column_name] = [AA_dict[i] for i in df_data[column_name]]
+
+	elif target_encoding.startswith('esm2_'):
+		
+		if not os.path.exists('./fasta_data'):
+			os.mkdir('./fasta_data')
+		fasta_dir = os.listdir('./fasta_data')
+		if len(fasta_dir) == 0:
+			fasta_list = df_data[column_name].unique()
+			AA = fasta_generate(fasta_list)
+
+		esm_model_dir = os.listdir("./esm_embedding/"+ target_encoding)
+		if len(esm_model_dir) == 0:
+			if target_encoding[6].isdigit() and target_encoding[7].isdigit():
+				esm_embedding('./esm_pretrained/' + target_encoding + '/' + target_encoding + '.pt', 
+						'./fasta_data/AA_Seq.txt', 
+						'./esm_embedding/'+ target_encoding + '/',
+						repr_layers= int(target_encoding[6:8]), include ="mean")
+			else: 
+				esm_embedding('./esm_pretrained/' + target_encoding + '/' + target_encoding + '.pt', 
+						'./fasta_data/AA_Seq.txt', 
+						'./esm_embedding/'+ target_encoding + '/',
+						repr_layers= int(target_encoding[6]), include ="mean")
+			
+		file1 = open('./fasta_data/AA_Seq.txt', 'r')
+		Lines = file1.readlines()
+		AA_keys = [] 
+		AA_values = []
+		for i in range(0, len(Lines), 2):
+			Lines[i] = Lines[i].replace(">", "")
+			AA_keys.append(Lines[i].replace("\n", ""))
+			AA_values.append(Lines[i+1].replace("\n", ""))
+		AA_dict = dict(zip(AA_values, AA_keys))
+		df_data[save_column_name] = [AA_dict[i] for i in df_data[column_name]]
+
+		tmp_model_dir = "./esm_embedding/" + target_encoding + '/'
+		for i in range(len(df_data[save_column_name])):
+			#df_data[save_column_name][i] = (torch.load(tmp_model_dir+df_data[save_column_name][i]+".pt"))['mean_representations'][0].tolist()
+			df_data[save_column_name][i] = (torch.load(tmp_model_dir+df_data[save_column_name][i]+".pt"))['mean_representations'][0]
 	else:
 		raise AttributeError("Please use the correct protein encoding available!")
 	return df_data
@@ -912,7 +959,7 @@ def generate_config(drug_encoding = None, target_encoding = None,
 					rnn_target_hid_dim = 64,
 					rnn_target_n_layers = 2,
 					rnn_target_bidirectional = True,
-					num_workers = 0,
+					num_workers = 1,
 					cuda_id = None,
 					gnn_hid_dim_drug = 64,
 					gnn_num_layers = 3,
@@ -926,7 +973,7 @@ def generate_config(drug_encoding = None, target_encoding = None,
 					wandb_project_name = None,
 					wandb_project_entity = None,
 					use_early_stopping = False,
-					patience = 5,
+					patience = 30,
 					delta = 0,
 					metric_to_optimize_early_stopping = 'loss',
 					metric_to_optimize_best_epoch_selection = 'loss',
@@ -935,7 +982,12 @@ def generate_config(drug_encoding = None, target_encoding = None,
 					fully_layer_1 = 256,
 					fully_layer_2 = 128,
 					drop_rate = 0.25,
-					filter = 32, 
+					filter = 32,
+					esm_model_dir = './',
+					esm_embedding_dir = './',
+					fasta_file = './',
+					repr_layers = None,
+					include = "mean",
 					):
 
 	base_config = {'input_dim_drug': input_dim_drug,
@@ -972,7 +1024,11 @@ def generate_config(drug_encoding = None, target_encoding = None,
 					'drop_rate' : drop_rate,
 					'batch_size' : batch_size,
 					'filter': filter, 
-
+					'esm_model_dir': esm_model_dir,
+					'esm_embedding_dir': esm_embedding_dir,
+					'fasta_file' : fasta_file, 
+					'repr_layers' : repr_layers,
+					'include' : include,
 	}
 	if not os.path.exists(base_config['result_folder']):
 		os.makedirs(base_config['result_folder'])
@@ -1089,6 +1145,26 @@ def generate_config(drug_encoding = None, target_encoding = None,
 		base_config['transformer_attention_probs_dropout'] = transformer_attention_probs_dropout
 		base_config['transformer_hidden_dropout_rate'] = transformer_hidden_dropout_rate
 		base_config['hidden_dim_protein'] = transformer_emb_size_target
+
+	# elif target_encoding == 'ESMFold':
+	# # 	#base_config['hidden_dim_protein'] = 320+base_config['hidden_dim_drug']-base_config['batch_size']
+	# 	base_config['input_dim_protein'] = 1280
+	# 	base_config['esm_model_dir'] = esm_model_dir
+	# 	base_config['esm_embedding_dir'] = esm_embedding_dir
+	# 	base_config['fasta_file'] = fasta_file
+	
+	elif target_encoding[:4] == 'esm2' :
+		esm_dict = {"6": 320, "12": 480, "30": 640, "33": 1280}
+		#base_config['cnn_target_filters'] = cnn_target_filters
+		#base_config['cnn_target_kernels'] = cnn_target_kernels
+		if target_encoding[6].isdigit() and target_encoding[7].isdigit():
+			base_config['input_dim_protein'] = esm_dict[str(target_encoding[6:8])]
+		else: 
+			base_config['input_dim_protein'] = esm_dict[str(target_encoding[6])]
+		#base_config['input_dim_protein'] = 320
+		#base_config['input_dim_protein'] = 480
+		#base_config['input_dim_protein'] = 640
+		#base_config['hidden_dim_protein'] = 1280
 	elif target_encoding is None:
 		pass
 
@@ -1138,6 +1214,84 @@ def protein2emb_encoder(x):
 		input_mask = [1] * max_p
 		
 	return i, np.asarray(input_mask)
+
+def fasta_generate(x):
+	ofile = open("./fasta_data/AA_Seq.txt", "w")
+	for i in range(len(x)):
+		ofile.write(">" + "AA_"+str(i) + "\n" +x[i] + "\n")
+
+	#do not forget to close it
+	ofile.close()
+
+def esm_embedding(model_location, fasta_file, output_dir, repr_layers, include):
+    model, alphabet = pretrained.load_model_and_alphabet_local(model_location)
+    model.eval()
+    if isinstance(model, MSATransformer):
+        raise ValueError(
+            "This script currently does not handle models with MSA input (MSA Transformer)."
+        )
+    if torch.cuda.is_available():
+        model = model.cuda()
+        print("Transferred model to GPU")
+
+    dataset = FastaBatchedDataset.from_file(fasta_file)
+    batches = dataset.get_batch_indices(toks_per_batch=4096, extra_toks_per_seq=1)
+    data_loader = torch.utils.data.DataLoader(
+        dataset, collate_fn=alphabet.get_batch_converter(truncation_seq_length=1022), batch_sampler=batches
+    )
+    print(f"Read {fasta_file} with {len(dataset)} sequences")
+
+    pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
+    return_contacts = "contacts" in include
+
+    assert all(-(model.num_layers + 1) <= i <= model.num_layers for i in [0, 5,6])
+    repr_layers = [(i + model.num_layers + 1) % (model.num_layers + 1) for i in [0, 5,6]]
+
+    with torch.no_grad():
+        for batch_idx, (labels, strs, toks) in enumerate(data_loader):
+            print(
+                f"Processing {batch_idx + 1} of {len(batches)} batches ({toks.size(0)} sequences)"
+            )
+            if torch.cuda.is_available():
+                toks = toks.to(device="cuda", non_blocking=True)
+
+            out = model(toks, repr_layers=repr_layers, return_contacts=return_contacts)
+
+            logits = out["logits"].to(device="cpu")
+            representations = {
+                layer: t.to(device="cpu") for layer, t in out["representations"].items()
+            }
+            if return_contacts:
+                contacts = out["contacts"].to(device="cpu")
+
+            for i, label in enumerate(labels):
+                output_file = pathlib.Path(output_dir) / f"{label}.pt"
+                output_file.parent.mkdir(parents=True, exist_ok=True)
+                result = {"label": label}
+                truncate_len = min(1022, len(strs[i]))
+                # Call clone on tensors to ensure tensors are not views into a larger representation
+                # See https://github.com/pytorch/pytorch/issues/1995
+                if "per_tok" in include:
+                    result["representations"] = {
+                        layer: t[i, 1 : truncate_len + 1].clone()
+                        for layer, t in representations.items()
+                    }
+                if "mean" in include:
+                    result["mean_representations"] = {
+                        layer: t[i, 1 : truncate_len + 1].mean(0).clone()
+                        for layer, t in representations.items()
+                    }
+                if "bos" in include:
+                    result["bos_representations"] = {
+                        layer: t[i, 0].clone() for layer, t in representations.items()
+                    }
+                if return_contacts:
+                    result["contacts"] = contacts[i, : truncate_len, : truncate_len].clone()
+
+                torch.save(
+                    result,
+                    output_file,
+                )
 
 def drug2emb_encoder(x):
 
@@ -1679,7 +1833,7 @@ class EarlyStopping:
 			self.counter += 1
 			if self.verbose:
 				print(
-					f'-----------------------------EarlyStopping counter: {self.counter} out of {self.patience}---------------------- best epoch currently {self.best_epoch}'
+					f'-----------------------------EarlyStopping counter: {self.counter} out of {self.patience}---------------------- best epoch currently {self.best_epoch+1}'
 				)
 			if self.counter >= self.patience:
 				self.early_stop_flag = True
