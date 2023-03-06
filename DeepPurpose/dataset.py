@@ -168,7 +168,7 @@ def download_BindingDB(path = './data'):
 	print('Beginning to download dataset...')
 
 	if not os.path.exists(path):
-	    os.makedirs(path)
+		os.makedirs(path)
 
 	url = " https://www.bindingdb.org/rwd/bind/chemsearch/marvin/SDFdownload.jsp?download_file=/bind/downloads/BindingDB_All_2022m7.tsv.zip"	
 	## url = 'https://www.bindingdb.org/bind/downloads/BindingDB_All_2021m11.tsv.zip'
@@ -176,8 +176,8 @@ def download_BindingDB(path = './data'):
 
 	print('Beginning to extract zip file...')
 	with ZipFile(saved_path, 'r') as zip:
-	    zip.extractall(path = path)
-	    print('Done!')
+		zip.extractall(path = path)
+		print('Done!')
 	path = path + '/BindingDB_All.tsv'
 	return path
 
@@ -187,7 +187,7 @@ def download_DrugTargetCommons(path):
 	print('Beginning to download dataset...')
 
 	if not os.path.exists(path):
-	    os.makedirs(path)
+		os.makedirs(path)
 
 	url = 'https://drugtargetcommons.fimm.fi/static/Excell_files/DTC_data.csv'
 	saved_path = wget.download(url, path)
@@ -312,17 +312,19 @@ def process_BindingDB(path = None, df = None, y = 'Kd', binary = False, \
 
 def load_process_DAVIS(path = './data', binary = False, convert_to_log = True, threshold = 30):
 	print('Beginning Processing...')
-
 	if not os.path.exists(path):
-	    os.makedirs(path)
-
-	# url = 'https://drive.google.com/uc?export=download&id=14h-0YyHN8lxuc0KV3whsaSaA-4KSmiVN'
-	url = 'https://github.com/futianfan/DeepPurpose_Data/blob/main/DAVIS.zip?raw=true'
-	saved_path = wget.download(url, path)
-
+		os.makedirs(path)
+	if len(os.listdir(path)) == 0 :
+		# url = 'https://drive.google.com/uc?export=download&id=14h-0YyHN8lxuc0KV3whsaSaA-4KSmiVN'
+		url = 'https://github.com/futianfan/DeepPurpose_Data/blob/main/DAVIS.zip?raw=true'
+		saved_path = wget.download(url, path)
+		with ZipFile(saved_path, 'r') as zip:
+			zip.extractall(path = path)
+	else:
+		pass
 	print('Beginning to extract zip file...')
-	with ZipFile(saved_path, 'r') as zip:
-	    zip.extractall(path = path)
+	#with ZipFile(saved_path, 'r') as zip:
+	#    zip.extractall(path = path)
 
 	affinity = pd.read_csv(path + '/DAVIS/affinity.txt', header=None, sep = ' ')
 
@@ -362,7 +364,7 @@ def load_process_KIBA(path = './data', binary = False, threshold = 9):
 
 
 	if not os.path.exists(path):
-	    os.makedirs(path)
+		os.makedirs(path)
 
 	# url = 'https://drive.google.com/uc?export=download&id=1fb3ZI-3_865OuRMWNMzLPnbLm9CktM44'
 	url = 'https://github.com/futianfan/DeepPurpose_Data/blob/main/KIBA.zip?raw=true'
@@ -370,7 +372,7 @@ def load_process_KIBA(path = './data', binary = False, threshold = 9):
 
 	print('Beginning to extract zip file...')
 	with ZipFile(saved_path, 'r') as zip:
-	    zip.extractall(path = path)
+		zip.extractall(path = path)
 
 	affinity = pd.read_csv(path + '/KIBA/affinity.txt', header=None, sep = '\t')
 	affinity = affinity.fillna(-1)
@@ -474,7 +476,7 @@ def load_AqSolDB(path = './data'):
 def load_broad_repurposing_hub(path = './data'):
 	url = 'https://dataverse.harvard.edu/api/access/datafile/4159648'
 	if not os.path.exists(path):
-	    os.makedirs(path)
+		os.makedirs(path)
 	download_path = os.path.join(path, 'broad.tab')
 	download_url(url, download_path)
 	df = pd.read_csv(download_path, sep = '\t')
@@ -484,7 +486,7 @@ def load_broad_repurposing_hub(path = './data'):
 def load_antiviral_drugs(path = './data', no_cid = False):
 	url = 'https://dataverse.harvard.edu/api/access/datafile/4159652'
 	if not os.path.exists(path):
-	    os.makedirs(path)
+		os.makedirs(path)
 	download_path = os.path.join(path, 'antiviral_drugs.tab')
 	download_url(url, download_path)
 	df = pd.read_csv(download_path, sep = '\t')
@@ -497,7 +499,7 @@ def load_IC50_Not_Pretrained(path = './data', n=500):
 	print('Downloading...')
 	url = 'https://dataverse.harvard.edu/api/access/datafile/4159695'
 	if not os.path.exists(path):
-	    os.makedirs(path)
+		os.makedirs(path)
 	download_path = os.path.join(path, 'IC50_not_Kd.csv')
 	download_url(url, download_path)
 	df = pd.read_csv(download_path).sample(n = n, replace = False).reset_index(drop = True)
@@ -507,7 +509,7 @@ def load_IC50_1000_Samples(path = './data', n=100):
 	print('Downloading...')
 	url = 'https://dataverse.harvard.edu/api/access/datafile/4159681'
 	if not os.path.exists(path):
-	    os.makedirs(path)
+		os.makedirs(path)
 	download_path = os.path.join(path, 'IC50_samples.csv')
 	download_url(url, download_path)
 	df = pd.read_csv(download_path).sample(n = n, replace = False).reset_index(drop = True)
