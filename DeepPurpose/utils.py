@@ -17,6 +17,10 @@ from rdkit.Chem.Draw import DrawingOptions
 import cairosvg
 import subprocess
 import cv2 
+import torch.nn as nn
+import torchvision.models as models
+import torchvision.transforms as transforms
+
 
 try:
 	from descriptastorus.descriptors import rdDescriptors, rdNormalizedDescriptors
@@ -320,7 +324,6 @@ def create_fold(df, fold_seed, frac):
 	train_val = df[~df.index.isin(test.index)]
 	val = train_val.sample(frac = val_frac/(1-test_frac), replace = False, random_state = 1)
 	train = train_val[~train_val.index.isin(val.index)]
-	
 	return train, val, test
 
 # cold protein
@@ -337,7 +340,7 @@ def create_fold_setting_cold_protein(df, fold_seed, frac):
 																		  random_state = fold_seed).values
 	val = train_val[train_val['Target Sequence'].isin(gene_drop_val)]
 	train = train_val[~train_val['Target Sequence'].isin(gene_drop_val)]
-	
+
 	return train, val, test
 
 # cold drug
@@ -354,55 +357,48 @@ def create_fold_setting_cold_drug(df, fold_seed, frac):
 																 random_state = fold_seed).values
 	val = train_val[train_val['SMILES'].isin(drug_drop_val)]
 	train = train_val[~train_val['SMILES'].isin(drug_drop_val)]
-	
+
 	return train, val, test
 
-# cold drug & protein 
 def create_fold_setting_cold_drug_protein_interaction(df, fold_seed, frac):
 	train_frac, val_frac, test_frac = frac
 
-	drug_drop = data['SMILES'].drop_duplicates().sample(frac = test_frac, replace = False, random_state = fold_seed).values
+	drug_drop = df['SMILES'].drop_duplicates().sample(frac = test_frac, replace = False, random_state = fold_seed).values
 
-	drug_before_discard = data[data['SMILES'].isin(drug_drop)]
+	drug_before_discard = df[df['SMILES'].isin(drug_drop)]
 
-	drug_index = drug_before_discard['SMILES'].drop_duplicates().index.tolist()
-	
-	gene_drop = data['Target Sequence'].drop_duplicates().sample(frac = test_frac, replace = False, random_state = fold_seed).values
+	gene_drop = df['Target Sequence'].drop_duplicates().sample(frac = test_frac, replace = False, random_state = fold_seed).values
 
-	gene_before_discard = data[data['Target Sequence'].isin(gene_drop)]
+	gene_before_discard = df[df['Target Sequence'].isin(gene_drop)]
 
-	gene_index = gene_before_discard['Target Sequence'].drop_duplicates().index.tolist()
+	drug_test = df[df['SMILES'].isin(drug_drop)]
 
-	remain_drug_test = []
-	remain_gene_test = [] 
-	remain_drug_tmp = []
-	remain_gene_tmp = [] 
+	test = drug_test[drug_test['Target Sequence'].isin(gene_drop)]
 
-	for i in range(int(len(drug_index)*test_frac*2)):
-		remain_drug_test.append(random.choice(drug_index))
-	for i in range(int(len(drug_index)*test_frac*2)):
-		remain_drug_test.append(random.choice(drug_index))
+	train_val = df[~df['SMILES'].isin(drug_drop)]
 
-	for j in range(int(len(gene_index)*test_frac*2)):
-		remain_gene_test.append(random.choice(gene_index))
-
-	for m in range(len(remain_drug_test)):
-		remain_drug_tmp.append(data['SMILES'][remain_drug_test[m]])
-
-	for n in range(len(remain_gene_test)):
-		remain_gene_tmp.append(data['Target Sequence'][remain_gene_test[n]])
-
-	drug_test = data[data['SMILES'].isin(remain_drug_tmp)]
-
-	test = drug_test[drug_test['Target Sequence'].isin(remain_gene_tmp)]
-
-	train_val = data[~data['SMILES'].isin(drug_drop)]
-	
 	train_val = train_val[~train_val['Target Sequence'].isin(gene_drop)]
 
-	val = train_val.sample(frac = val_frac/(1-test_frac), replace = False, random_state = 1)
+	drug_drop_val = train_val['SMILES'].drop_duplicates().sample(frac = val_frac/(1-test_frac), 
+																 replace = False, 
+																 random_state = fold_seed).values
+	
+	gene_drop_val = train_val['Target Sequence'].drop_duplicates().sample(frac = val_frac/(1-test_frac), 
+																		replace = False, 
+																		random_state = fold_seed).values
 
-	train = train_val[~train_val.index.isin(val.index)]
+	drug_val = train_val[train_val['SMILES'].isin(drug_drop_val)]
+
+	val = drug_val[drug_val['Target Sequence'].isin(gene_drop_val)]
+	
+	train = train_val[~train_val['SMILES'].isin(drug_drop_val)]
+
+	train = train[~train['Target Sequence'].isin(gene_drop_val)]
+
+
+	test_list = test['SMILES'].unique()
+	val_list = val['SMILES'].unique()
+	train_list = train['SMILES'].unique()
 
 	return train, val, test
 
@@ -457,8 +453,24 @@ def encode_drug(df_data, drug_encoding, column_name = 'SMILES', save_column_name
 	elif drug_encoding in ['DGL_GIN_AttrMasking', 'DGL_GIN_ContextPred']:
 		df_data[save_column_name] = df_data[column_name]
 	elif drug_encoding == 'Conv_CNN_2D':
-		img_generate = pd.Series(df_data[column_name].unique()).apply(imgsave)
-		unique = pd.Series(df_data[column_name].unique()).apply(img2vec)
+		dataset_check = pd.Series(df_data[column_name].unique())
+		if len(dataset_check) == 68: 
+			dataset = 'DAVIS'
+		else:
+			dataset = 'KIBA'
+		img_generate = pd.Series(df_data[column_name].unique()).apply(imgsave, args=(dataset,))
+		unique = pd.Series(df_data[column_name].unique()).apply(img2vec, args=(dataset,))
+		unique_dict = dict(zip(df_data[column_name].unique(), unique))
+		df_data[save_column_name] = [unique_dict[i] for i in df_data[column_name]]
+
+	elif drug_encoding == 'Resnet' or 'Resnet_freeze':
+		dataset_check = pd.Series(df_data[column_name].unique())
+		if len(dataset_check) == 68: 
+			dataset = 'DAVIS'
+		else:
+			dataset = 'KIBA'
+		img_generate = pd.Series(df_data[column_name].unique()).apply(imgsave, args=(dataset,))
+		unique = pd.Series(df_data[column_name].unique()).apply(img2vec_resnet, args=(dataset,))
 		unique_dict = dict(zip(df_data[column_name].unique(), unique))
 		df_data[save_column_name] = [unique_dict[i] for i in df_data[column_name]]
 	else:
@@ -488,13 +500,6 @@ def encode_protein(df_data, target_encoding, column_name = 'Target Sequence', sa
 		AA = pd.Series(df_data[column_name].unique()).apply(target2quasi)
 		AA_dict = dict(zip(df_data[column_name].unique(), AA))
 		df_data[save_column_name] = [AA_dict[i] for i in df_data[column_name]]
-		#test = "LKMNKLPSNRGNTLREVQLMNRLRHPNILRFMGVCVHQGQLHALTEYMNGGTLEXLLSSPEPLSWPVRLHLALDIARGLRYLHSKGVFHRDLTSKNCLVRREDRGFTAVVGDFGLAEKIPVYREGARKEPLAVVGSPYWMAPEVLRGELYDEKADVFAFGIVLCELIARVPADPDYLPRTEDFGLDVPAFRTLVGDDCPLPFLLLAIHCCNLEPSTRAPFTEITQHLEWILEQLPEPAPLTXTA"
-		#count = 0 
-		#for i in (df_data[column_name]):
-		#	if i == test: 
-		#		count += 1 	
-		#print(count)
-		#raise AttributeError ("stop")
 	elif target_encoding == 'ESPF':
 		AA = pd.Series(df_data[column_name].unique()).apply(protein2espf)
 		AA_dict = dict(zip(df_data[column_name].unique(), AA))
@@ -514,28 +519,32 @@ def encode_protein(df_data, target_encoding, column_name = 'Target Sequence', sa
 		df_data[save_column_name] = [AA_dict[i] for i in df_data[column_name]]
 
 	elif target_encoding.startswith('esm2_'):
-		
-		if not os.path.exists('./fasta_data'):
-			os.mkdir('./fasta_data')
-		fasta_dir = os.listdir('./fasta_data')
+		dataset_check = pd.Series(df_data['SMILES'].unique())
+		if len(dataset_check) == 68: 
+			dataset = 'DAVIS'
+		else:
+			dataset = 'KIBA'
+		if not os.path.exists('./fasta_data/'+dataset):
+			os.mkdir('./fasta_data/'+dataset)
+		fasta_dir = os.listdir('./fasta_data/'+dataset)
 		if len(fasta_dir) == 0:
 			fasta_list = df_data[column_name].unique()
-			AA = fasta_generate(fasta_list)
+			AA = fasta_generate(fasta_list, args=(dataset,))
 
-		esm_model_dir = os.listdir("./esm_embedding/"+ target_encoding)
+		esm_model_dir = os.listdir("./esm_embedding/"+ dataset + "/" + target_encoding)
 		if len(esm_model_dir) == 0:
 			if target_encoding[6].isdigit() and target_encoding[7].isdigit():
 				esm_embedding('./esm_pretrained/' + target_encoding + '/' + target_encoding + '.pt', 
-						'./fasta_data/AA_Seq.txt', 
-						'./esm_embedding/'+ target_encoding + '/',
+						'./fasta_data/' +dataset+ '/AA_Seq_' + dataset + '.txt', 
+						'./esm_embedding/'+ dataset +  '/'+ target_encoding + '/',
 						repr_layers= int(target_encoding[6:8]), include ="mean")
 			else: 
 				esm_embedding('./esm_pretrained/' + target_encoding + '/' + target_encoding + '.pt', 
-						'./fasta_data/AA_Seq.txt', 
-						'./esm_embedding/'+ target_encoding + '/',
+						'./fasta_data/' + dataset+ '/AA_Seq_' + dataset  + '.txt', 
+						'./esm_embedding/'+ dataset +  '/'+ target_encoding + '/',
 						repr_layers= int(target_encoding[6]), include ="mean")
 			
-		file1 = open('./fasta_data/AA_Seq.txt', 'r')
+		file1 = open('./fasta_data/' + dataset+ '/AA_Seq_' + dataset +  '.txt', 'r')
 		Lines = file1.readlines()
 		AA_keys = [] 
 		AA_values = []
@@ -546,7 +555,7 @@ def encode_protein(df_data, target_encoding, column_name = 'Target Sequence', sa
 		AA_dict = dict(zip(AA_values, AA_keys))
 		df_data[save_column_name] = [AA_dict[i] for i in df_data[column_name]]
 
-		tmp_model_dir = "./esm_embedding/" + target_encoding + '/'
+		tmp_model_dir = "./esm_embedding/" + dataset+ '/' + target_encoding + '/'
 		for i in range(len(df_data[save_column_name])):
 			#df_data[save_column_name][i] = (torch.load(tmp_model_dir+df_data[save_column_name][i]+".pt"))['mean_representations'][0].tolist()
 			df_data[save_column_name][i] = (torch.load(tmp_model_dir+df_data[save_column_name][i]+".pt"))['mean_representations'][0]
@@ -988,6 +997,8 @@ def generate_config(drug_encoding = None, target_encoding = None,
 					fasta_file = './',
 					repr_layers = None,
 					include = "mean",
+					dataset = "DAVIS",
+
 					):
 
 	base_config = {'input_dim_drug': input_dim_drug,
@@ -1029,6 +1040,8 @@ def generate_config(drug_encoding = None, target_encoding = None,
 					'fasta_file' : fasta_file, 
 					'repr_layers' : repr_layers,
 					'include' : include,
+					'dataset' : dataset, 
+
 	}
 	if not os.path.exists(base_config['result_folder']):
 		os.makedirs(base_config['result_folder'])
@@ -1104,7 +1117,24 @@ def generate_config(drug_encoding = None, target_encoding = None,
 		base_config['drop_rate'] = drop_rate
 		base_config['batch_size'] = batch_size
 		base_config['filter'] = filter
-		base_config['hidden_dim_drug'] = 68 # number of output node from Conv_CNN_2D in encoder.py
+		base_config['dataset'] == dataset
+		if base_config['dataset'] == "DAVIS":
+			base_config['hidden_dim_drug'] = hidden_dim_drug
+		if base_config['dataset'] == "KIBA":
+			base_config['hidden_dim_drug'] = hidden_dim_drug # number of output node from Conv_CNN_2D in encoder.py
+
+	elif drug_encoding == "Resnet" or "Resnet_freeze":
+		base_config['fully_layer_1'] = fully_layer_1
+		base_config['drop_rate'] = drop_rate
+		base_config['batch_size'] = batch_size
+		base_config['filter'] = filter
+		base_config['dataset'] == dataset
+		if base_config['dataset'] == "DAVIS":
+			base_config['hidden_dim_drug'] = hidden_dim_drug
+		if base_config['dataset'] == "KIBA":
+			base_config['hidden_dim_drug'] = hidden_dim_drug # number of output node from Conv_CNN_2D in encoder.py
+
+
 	elif drug_encoding is None:
 		pass
 	
@@ -1170,7 +1200,6 @@ def generate_config(drug_encoding = None, target_encoding = None,
 
 	else:
 		raise AttributeError("Please use the correct protein encoding available!")
-
 	return base_config
 
 def convert_y_unit(y, from_, to_):
@@ -1215,13 +1244,14 @@ def protein2emb_encoder(x):
 		
 	return i, np.asarray(input_mask)
 
-def fasta_generate(x):
-	ofile = open("./fasta_data/AA_Seq.txt", "w")
+def fasta_generate(x, dataset):
+
+	ofile = open("./fasta_data/" + dataset + "/" + "AA_Seq_" + dataset+".txt", "w" )
 	for i in range(len(x)):
 		ofile.write(">" + "AA_"+str(i) + "\n" +x[i] + "\n")
 
-	#do not forget to close it
 	ofile.close()
+
 
 def esm_embedding(model_location, fasta_file, output_dir, repr_layers, include):
     model, alphabet = pretrained.load_model_and_alphabet_local(model_location)
@@ -1375,19 +1405,28 @@ def trans_drug(x):
 		temp = temp [:MAX_SEQ_DRUG]
 	return temp
 
-def imgsave(x, image_path='./Image/DAVIS') :
-	IMG_SIZE = 200
-	if not os.path.exists(image_path):
-		os.mkdir(image_path)
-	mol = Chem.MolFromSmiles(x)
-	DrawingOptions.atomLabelFontSize = 55
-	DrawingOptions.dotsPerAngstrom = 100
-	DrawingOptions.bondLineWidth = 1.5
-	# Remove svg to png format because one SMILES contain "#" sign that cannot be used as url. 
-	Draw.MolToFile(mol, os.path.join(image_path, "{}.png".format(x)), size= ( IMG_SIZE , IMG_SIZE ))
 
-def img2vec(x, image_path='./Image/DAVIS'):
-	img_path = os.path.join(image_path, "{}.png".format(x))
+
+def imgsave(x, dataset, image_path='./Image') :
+	IMG_SIZE = 200
+	if not os.path.exists(image_path+ '/' + dataset):
+		os.mkdir(image_path+ '/' + dataset)
+
+	if len(os.listdir(image_path+ '/' + dataset)) == 0 :
+		mol = Chem.MolFromSmiles(x)
+		DrawingOptions.atomLabelFontSize = 55
+		DrawingOptions.dotsPerAngstrom = 100
+		DrawingOptions.bondLineWidth = 1.5
+		if len(x) >= 200: 
+			x = x[:200]
+		Draw.MolToFile(mol, os.path.join(image_path+'/'+ dataset, "{}.png".format(x)), size= ( IMG_SIZE , IMG_SIZE ))
+	else:
+		pass
+
+def img2vec(x, dataset, image_path='./Image'):
+	if len(x) >= 200: 
+		x = x[:200]
+	img_path = os.path.join(image_path+'/'+ dataset+"/", "{}.png".format(x))
 	img_arr = cv2.imread(img_path)
 	if random.random()>=0.50:
 		angle = random.randint(0,359)
@@ -1400,6 +1439,24 @@ def img2vec(x, image_path='./Image/DAVIS'):
 	img_arr = img_arr.transpose((2, 0, 1))
 
 	return img_arr
+
+
+
+def img2vec_resnet(x, dataset, image_path='./Image'):
+	if len(x) >= 200: 
+		x = x[:200]
+	img_path = os.path.join(image_path+'/'+ dataset+"/", "{}.png".format(x))
+	transform = transforms.Compose([
+		transforms.Resize(200),
+		transforms.CenterCrop(200),
+		transforms.ToTensor(),
+		transforms.Normalize(mean=[0.485, 0.456, 0.406],
+							 std=[0.229, 0.224, 0.225])
+	])
+	img = Image.open(img_path)
+	img_tensor = transform(img)
+	img_tensor = img_tensor.unsqueeze(0)
+	return img_tensor.squeeze().numpy()
 
 
 

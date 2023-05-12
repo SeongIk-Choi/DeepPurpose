@@ -361,19 +361,18 @@ def load_process_DAVIS(path = './data', binary = False, convert_to_log = True, t
 
 def load_process_KIBA(path = './data', binary = False, threshold = 9):
 	print('Beginning Processing...')
-
-
 	if not os.path.exists(path):
 		os.makedirs(path)
+	if len(os.listdir(path)) == 0 :
+		# url = 'https://drive.google.com/uc?export=download&id=1fb3ZI-3_865OuRMWNMzLPnbLm9CktM44'
+		url = 'https://github.com/futianfan/DeepPurpose_Data/blob/main/KIBA.zip?raw=true'
+		saved_path = wget.download(url, path)
 
-	# url = 'https://drive.google.com/uc?export=download&id=1fb3ZI-3_865OuRMWNMzLPnbLm9CktM44'
-	url = 'https://github.com/futianfan/DeepPurpose_Data/blob/main/KIBA.zip?raw=true'
-	saved_path = wget.download(url, path)
-
-	print('Beginning to extract zip file...')
-	with ZipFile(saved_path, 'r') as zip:
-		zip.extractall(path = path)
-
+		print('Beginning to extract zip file...')
+		with ZipFile(saved_path, 'r') as zip:
+			zip.extractall(path = path)
+	else:
+		pass
 	affinity = pd.read_csv(path + '/KIBA/affinity.txt', header=None, sep = '\t')
 	affinity = affinity.fillna(-1)
 

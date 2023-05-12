@@ -4,6 +4,8 @@ import torch.nn.functional as F
 from torch.utils import data
 from torch.utils.data import SequentialSampler
 from torch import nn 
+from sklearn.decomposition import PCA
+import umap.umap_ as umap
 
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -18,6 +20,7 @@ torch.manual_seed(2)
 np.random.seed(3)
 import copy
 from prettytable import PrettyTable
+import matplotlib.patches as mpatches
 
 import os
 from datetime import datetime
@@ -29,36 +32,39 @@ from DeepPurpose.encoders import *
 from torch.utils.tensorboard import SummaryWriter
 import wandb
 from DeepPurpose.utils import EarlyStopping
+from sklearn.manifold import TSNE
+import csv 
 
 class MLP_Classifier(nn.Sequential):
 	def __init__(self, model_drug, model_protein, **config):
 		super(MLP_Classifier, self).__init__()
 		self.input_dim_drug = config['hidden_dim_drug']
 		self.input_dim_protein = config['hidden_dim_protein']
-
 		self.model_drug = model_drug
 		self.model_protein = model_protein
-
 		self.dropout = nn.Dropout(0.1)
-
 		self.hidden_dims = config['cls_hidden_dims']
 		layer_size = len(self.hidden_dims) + 1
 		dims = [self.input_dim_drug + self.input_dim_protein] + self.hidden_dims + [1]
 		
 		self.predictor = nn.ModuleList([nn.Linear(dims[i], dims[i+1]) for i in range(layer_size)])
 
+
 	def forward(self, v_D, v_P):
 		# each encoding
+
 		v_D = self.model_drug(v_D)
 		v_P = self.model_protein(v_P)
-		# concatenate and classify
-		v_f = torch.cat((v_D, v_P), 1)
+		v_f = torch.cat((v_D, v_P), 1) 
+
 		for i, l in enumerate(self.predictor):
 			if i==(len(self.predictor)-1):
 				v_f = l(v_f)
 			else:
 				v_f = F.relu(self.dropout(l(v_f)))
 		return v_f
+
+	
 
 class Dot_Product_Classifier(nn.Sequential):
 	def __init__(self, model_drug, model_protein, **config):
@@ -238,7 +244,7 @@ def dgl_collate_func(x):
 	d, p, y = zip(*x)
 	import dgl
 	d = dgl.batch(d)
-	return d, torch.tensor(p), torch.tensor(y)
+	return d, torch.tensor(np.array(p)), torch.tensor(np.array(y))
 
 class DBTA:
 	'''
@@ -272,7 +278,11 @@ class DBTA:
 		elif drug_encoding == 'CNN_RNN':
 			self.model_drug = CNN_RNN('drug', **config)
 		elif drug_encoding == 'Conv_CNN_2D':
-			self.model_drug = Conv_CNN_2D(config['fully_layer_1'], config['fully_layer_2'], config['drop_rate'], config['batch_size'], config['filter'])
+			self.model_drug = Conv_CNN_2D(config['fully_layer_1'], config['fully_layer_2'], config['drop_rate'], config['batch_size'], config['filter'], config['dataset'], config['hidden_dim_drug'])
+		elif drug_encoding == 'Resnet':
+			self.model_drug = Resnet(config['fully_layer_1'], config['drop_rate'], config['batch_size'], config['filter'], config['dataset'], config['hidden_dim_drug'])
+		elif drug_encoding == 'Resnet_freeze':
+			self.model_drug = Resnet_freeze(config['fully_layer_1'], config['drop_rate'], config['batch_size'], config['filter'], config['dataset'], config['hidden_dim_drug'])
 		elif drug_encoding == 'Transformer':
 			self.model_drug = transformer('drug', **config)
 		elif drug_encoding == 'MPNN':
@@ -322,13 +332,15 @@ class DBTA:
 			#self.model_protein = ESMFold(config['model_location'], config['fasta_file'], config['output_dir'], config['repr_layers'], config['include'],device = config['device'])
 		else:
 			raise AttributeError('Please use one of the available encoding method.')
-		
+
 		if config['general_architecture_version'] == 'mlp':
 			print('Using the MLP version of the architecture...')
 			self.model = MLP_Classifier(self.model_drug, self.model_protein, **config)
+
 		elif config['general_architecture_version'] == 'dot_product':
 			print('Using the dot product version of the architecture...')
 			self.model = Dot_Product_Classifier(self.model_drug, self.model_protein, **config)
+
 
 		self.config = config
 		
@@ -458,6 +470,7 @@ class DBTA:
 			params['collate_fn'] = dgl_collate_func
 
 		training_generator = data.DataLoader(data_process_loader(train.index.values, train.Label.values, train, **self.config), **params)
+
 		if val is not None:
 			params['shuffle'] = True
 			validation_generator = data.DataLoader(data_process_loader(val.index.values, val.Label.values, val, **self.config), **params)
@@ -499,6 +512,8 @@ class DBTA:
 		iteration_loss = 0
 		mse_list = []
 		max_val_loss = 1000
+		train_drug = [] 
+		train_protein = [] 
 		for epo in range(train_epoch):
 			for i, (v_d, v_p, label) in enumerate(training_generator):
 				if self.target_encoding == 'Transformer':
@@ -510,6 +525,7 @@ class DBTA:
 				else:
 					v_d = v_d.float().to(self.device)               
 					#score = self.model(v_d, v_p.float().to(self.device))
+
 				score = self.model(v_d, v_p)
 				label = Variable(torch.from_numpy(np.array(label)).float()).to(self.device)
 				if self.binary:
@@ -585,7 +601,6 @@ class DBTA:
 				table.add_row(lst)
 			else:
 				model_max = copy.deepcopy(self.model)
-
 			
 			# update early stopping and keep track of best model 
 			self.early_stopping(
@@ -596,9 +611,7 @@ class DBTA:
 				print('Early stopping criterion met. Training stopped!!!')
 				break
 
-		# load early stopped model
 		self.model = model_max
-
 		if val is not None:
 			#### after training 
 			prettytable_file = os.path.join(self.experiment_dir, "valid_markdowntable.txt")
@@ -689,17 +702,88 @@ class DBTA:
 		score = self.test_(generator, self.model, repurposing_mode = True)
 		return score
 
+	def convert_to_tensor(self, train, val=None, test=None, **config):
+		params = {'batch_size': self.config['batch_size'],
+	    		'shuffle': True,
+	    		'num_workers': self.config['num_workers'],
+	    		'drop_last': False}
+
+		train_data_generator = data.DataLoader(data_process_loader(train.index.values, train.Label.values, train, **self.config), **params)
+		
+		fig, ax = plt.subplots()
+		for i, (v_d, v_p, label) in enumerate(train_data_generator):
+
+			v_p = v_p.float().to(self.device)
+			v_d = v_d.float().to(self.device)
+			pca_drug = self.model_drug.to(self.device)(v_d)			
+
+			pca_protein = self.model_protein.to(self.device)(v_p)
+			label = Variable(torch.from_numpy(np.array(label)).float()).to(self.device)
+
+			combined_output = torch.cat((pca_drug, pca_protein), dim=1)
+			
+			combined_output_cpu = combined_output.cpu()
+			pca_vector = combined_output_cpu.detach().numpy()
+			pca_vector_tensor = torch.from_numpy(pca_vector)
+
+			label = label.cpu().detach().numpy()
+
+			# if self.config['dataset'] == 'DAVIS':
+			# 	label[label == 5.0] = 0  # Non-binding
+			# 	label[label != 0] = 1  # Binding
+			# else:
+			# 	label[label < 12.1] = 1  # Binding
+			# 	label[label >= 12.1] = 0  # Non-Binding
+
+			norm = plt.Normalize(min(label), max(label))  # Binary normalization
+			cmap = plt.cm.get_cmap('RdYlGn')  # Red-Yellow-Green colormap
+
+			# Extract the output of the first linear layer
+			embedding1 = self.model.predictor[0](pca_vector_tensor)
+
+			# Extract the output of the second linear layer
+			embedding2 = self.model.predictor[1](F.relu(embedding1))
+
+			# Extract the output of the third linear layer
+			embedding3 = self.model.predictor[2](F.relu(embedding2))
+
+			#umap_result = umap.UMAP(n_neighbors=30, min_dist=0.3, n_components=2, random_state=42).fit_transform(embedding2.detach().numpy())
+
+			#tsne = TSNE(n_components=2, perplexity=30.0, early_exaggeration=12.0, learning_rate=200.0)
+			#umap_result = umap.UMAP(n_neighbors=100, min_dist=0.3, n_components=2, random_state=1).fit_transform(embedding3.detach().numpy())
+			pca = PCA(n_components=2)
+			pca_result = pca.fit_transform(embedding3.detach().numpy())
+
+			#tsne_result_first_layer = tsne.fit_transform(embedding1.detach().numpy())
+			#scatter = ax.scatter(tsne_result_first_layer[:, 0], tsne_result_first_layer[:, 1], c=label, cmap=cmap, norm=norm)
+			scatter = ax.scatter(pca_result[:, 0], pca_result[:, 1], c=label, cmap=cmap, norm=norm, alpha = 0.7)
+			#scatter = ax.scatter(umap_result[:, 0], umap_result[:, 1], c=label, cmap=cmap, norm=norm)
+
+			# Add colorbar to the right side of the plot
+		cbar = plt.colorbar(scatter, pad=0.01)
+		cbar.ax.set_ylabel('Label value', rotation=90)
+		plt.title('PCA with label gradient')
+		plt.savefig('test_pca_resnet_KIBA_Morgan_A_3.png')
+
+
 	def save_model(self, path_dir):
 		if not os.path.exists(path_dir):
 			os.makedirs(path_dir)
+		self.model.to(self.device)  # move model to GPU
 		torch.save(self.model.state_dict(), path_dir + '/model.pt')
 		save_dict(path_dir, self.config)
+
+	# def save_model(self, path_dir):
+	# 	if not os.path.exists(path_dir):
+	# 		os.makedirs(path_dir)
+	# 	torch.save(self.model.state_dict(), path_dir + '/model.pt')
+	# 	save_dict(path_dir, self.config)
 
 	def load_pretrained(self, path):
 		if not os.path.exists(path):
 			os.makedirs(path)
 
-		state_dict = torch.load(path, map_location = torch.device('cpu'))
+		state_dict = torch.load(path, map_location = torch.device('cuda'))
 		# to support training from multi-gpus data-parallel:
 		
 		if next(iter(state_dict))[:7] == 'module.':
@@ -712,5 +796,5 @@ class DBTA:
 			state_dict = new_state_dict
 
 		self.model.load_state_dict(state_dict)
-
 		self.binary = self.config['binary']
+

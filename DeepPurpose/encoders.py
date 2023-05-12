@@ -5,6 +5,11 @@ from torch.utils import data
 from torch.utils.data import SequentialSampler
 from torch import nn 
 
+import torch.utils.model_zoo as model_zoo
+
+import torchvision.models as models
+
+
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import numpy as np
@@ -241,7 +246,6 @@ class MLP(nn.Sequential):
 
 		for i, l in enumerate(self.predictor):
 			v = F.relu(l(v))
-
 		return v  
 
 class MPNN(nn.Sequential):
@@ -340,10 +344,10 @@ class DGL_GCN(nn.Module):
 		node_feats = self.gnn(bg, feats)
 		graph_feats = self.readout(bg, node_feats)
 		if self.encoding_checker == 'Transformer': 
-			print(self.encoding_checker)
+			#print(self.encoding_checker)
 			output = self.transform(graph_feats).reshape(-1,2)
 		else : 
-			print(self.encoding_checker)
+			#print(self.encoding_checker)
 			output = self.transform(graph_feats)
 		return output
 
@@ -459,59 +463,17 @@ class DGL_AttentiveFP(nn.Module):
 		graph_feats = self.readout(bg, node_feats, False)
 		return self.transform(graph_feats)
 
-# class Conv_CNN_2D(nn.Sequential):
-# 	## adapted from https://github.com/cansyl/DEEPScreen/blob/pytorch/bin/models.py
-# 	def __init__(self, fully_layer_1, fully_layer_2, drop_rate):
-# 		super(Conv_CNN_2D, self).__init__()
-# 		self.fully_layer_1 = fully_layer_1
-# 		self.fully_layer_2 = fully_layer_2
-# 		self.drop_rate = drop_rate
-# 		self.conv1 = nn.Conv2d(3, 32, 2)
-# 		self.bn1 = nn.BatchNorm2d(32)
-# 		self.conv2 = nn.Conv2d(32, 64, 2)
-# 		self.bn2 = nn.BatchNorm2d(64)
-# 		self.conv3 = nn.Conv2d(64, 128, 2)
-# 		self.bn3 = nn.BatchNorm2d(128)
-# 		self.conv4 = nn.Conv2d(128, 64, 2)
-# 		self.bn4 = nn.BatchNorm2d(64)
-# 		self.conv5 = nn.Conv2d(64, 32, 2)
-# 		self.bn5 = nn.BatchNorm2d(32)
-# 		print(self.conv5.weight.shape[-1])
-# 		self.pool = nn.MaxPool2d(2, 2)
-# 		self.drop_rate = drop_rate
-# 		self.fc1 = nn.Linear(32*5*5, fully_layer_1)
-# 		self.fc2 = nn.Linear(fully_layer_1, fully_layer_2)
-# 		self.fc3 = nn.Linear(fully_layer_2, 2)
-
-# 	def forward(self, x):
-
-# 		x = self.pool(F.relu(self.bn1(self.conv1(x))))
-
-# 		x = self.pool(F.relu(self.bn2(self.conv2(x))))
-
-# 		x = self.pool(F.relu(self.bn3(self.conv3(x))))
-
-# 		x = self.pool(F.relu(self.bn4(self.conv4(x))))
-
-# 		x = self.pool(F.relu(self.bn5(self.conv5(x))))
-
-
-# 		x = x.view(-1, 32*5*5)
-# 		x = F.dropout(F.relu(self.fc1(x)), self.drop_rate)
-# 		x = F.dropout(F.relu(self.fc2(x)), self.drop_rate)
-# 		x = self.fc3(x)
-# 		return x
-
 class Conv_CNN_2D(nn.Sequential):
 	## adapted from https://github.com/cansyl/DEEPScreen/blob/pytorch/bin/models.py
-	def __init__(self, fully_layer_1, fully_layer_2, drop_rate, batch_size, filter):
+	def __init__(self, fully_layer_1, fully_layer_2, drop_rate, batch_size, filter, dataset, hidden_dim_drug):
 		super(Conv_CNN_2D, self).__init__()
 		self.fully_layer_1 = fully_layer_1
 		self.fully_layer_2 = fully_layer_2
 		self.drop_rate = drop_rate
 		self.batch_size = batch_size
 		self.filter = filter
-		#self.conv_depth = conv_depth
+		self.dataset = dataset
+		self.hidden_dim_drug = hidden_dim_drug
 		self.conv1 = nn.Conv2d(3, filter, 2)
 		self.bn1 = nn.BatchNorm2d(filter)
 		self.conv2 = nn.Conv2d(filter, filter*2, 2)
@@ -523,51 +485,30 @@ class Conv_CNN_2D(nn.Sequential):
 		self.conv5 = nn.Conv2d(filter*2, filter, 2)
 		self.bn5 = nn.BatchNorm2d(filter)
 		self.pool = nn.MaxPool2d(2, 2) 
-		#print(self.conv5.weight.shape[-1])
 		self.fc1 = nn.Linear(int(filter)*5*5, fully_layer_1)
-		#self.fc1 = nn.Linear(int(filter)*24*24, fully_layer_1) # used for 3 layers. (depth = 3)
-		#self.fc1 = nn.Linear(cnn2d_batch*5*5, fully_layer_1)
+
 		self.fc2 = nn.Linear(fully_layer_1, fully_layer_2)
-		self.fc3 = nn.Linear(fully_layer_2, 68) # number of unique drugs
+		if self.dataset == "DAVIS":
+			self.fc3 = nn.Linear(fully_layer_2, hidden_dim_drug) # number of unique drugs	
+		if self.dataset == "KIBA": 
+			self.fc3 = nn.Linear(fully_layer_2, hidden_dim_drug) # number of unique drugs
 
 	def forward(self, x):
-		#batch_size = x.size()[0]
-		#print(batch_size)
 		x = self.pool(F.relu(self.bn1(self.conv1(x))))
-		#print(x.size())
 		x = self.pool(F.relu(self.bn2(self.conv2(x))))
-		#print(x.size())
 		x = self.pool(F.relu(self.bn3(self.conv3(x))))
-		#print(x.size())
 		x = self.pool(F.relu(self.bn4(self.conv4(x))))
-		#print(x.size())
 		x = self.pool(F.relu(self.bn5(self.conv5(x))))
-		#print(x)
-		#print(x.size())
-		#print(x.size()[-1])
-		#print(x.size())
-		x[0] = self.batch_size
-		#print(x.size())
-		#x.[0] = self.batch_size
-		x = x.view(-1, self.filter*5*5) # What this is doing here exactly is changing x to a vector with self.num_flat_features(x) elements (the size of the first dimension is inferred to be 1.)
-		#x = x.view(-1, self.filter*24*24) # What this is doing here exactly is changing x to a vector with self.num_flat_features(x) elements (the size of the first dimension is inferred to be 1.)
 
-		#x = x.view(-1, self.cnn2d_batch*5*5) # What this is doing here exactly is changing x to a vector with self.num_flat_features(x) elements (the size of the first dimension is inferred to be 1.)
+		x[0] = self.batch_size
+		x = x.view(-1, self.filter*5*5) # What this is doing here exactly is changing x to a vector with self.num_flat_features(x) elements (the size of the first dimension is inferred to be 1.)
+
 		x = F.dropout(F.relu(self.fc1(x)), self.drop_rate)
 		x = F.dropout(F.relu(self.fc2(x)), self.drop_rate)
 		x = self.fc3(x)
-		#print(x.size())
 		return x
 
-# class ESMFold(nn.Module):
-# 	def __init__(self, device):
-# 		super(ESMFold, self).__init__()
-# 		self.device = device
 
-# 	def forward(self, x):
-# 		x = x.to(self.device)                
-# 		return x
-	
 
 class ESMFold(nn.Sequential):
 	def __init__(self, input_dim, output_dim, hidden_dims_lst, device):
@@ -589,3 +530,89 @@ class ESMFold(nn.Sequential):
 		for i, l in enumerate(self.predictor):
 			v = F.relu(l(v))
 		return v  
+
+# Define the ResNet encoder
+class Resnet(nn.Sequential):
+	def __init__(self, full_layer1, drop_rate, batch_size, filter, dataset, hidden_dim_drug):
+		super(Resnet, self).__init__()
+		self.fully_layer1 = full_layer1
+		self.batch_size = batch_size
+		self.filter = filter
+		self.drop_rate = drop_rate
+		self.dataset = dataset
+		self.hidden_dim_drug = hidden_dim_drug
+        # Load the ResNet18 model
+		resnet18 = models.resnet18(pretrained=True)
+		modules = list(resnet18.children())[:-1]
+		self.resnet18 = nn.Sequential(*modules)
+		resnet_out_shape = self._get_resnet_out_shape()
+		self.fc1 = nn.Linear(resnet_out_shape, hidden_dim_drug)
+		self.dropout = nn.Dropout(p=drop_rate)
+
+	def _get_resnet_out_shape(self):
+		# Pass an example image through the ResNet model and get its output shape
+		example_input = torch.zeros((self.batch_size, 3, 200, 200))
+		resnet_out = self.resnet18(example_input)
+		resnet_out_shape = resnet_out.shape[1]
+		return resnet_out_shape
+
+	def forward(self, x):
+        # Pass the image through the ResNet model
+		x = self.resnet18(x)
+		
+		batch_size = x.shape[0]
+        # Flatten the output
+		x = x.view(batch_size, -1)
+
+        # Pass the flattened output through the fully connected layers
+		x = self.fc1(x)
+		x = self.dropout(x)
+		return x
+
+# Define the ResNet encoder
+class Resnet_freeze(nn.Sequential):
+	def __init__(self, full_layer1, drop_rate, batch_size, filter, dataset, hidden_dim_drug):
+		super(Resnet_freeze, self).__init__()
+		self.fully_layer1 = full_layer1
+		self.batch_size = batch_size
+		self.filter = filter
+		self.drop_rate = drop_rate
+		self.dataset = dataset
+		self.hidden_dim_drug = hidden_dim_drug
+        # Load the ResNet18 model
+		resnet18 = models.resnet18(pretrained=True)
+
+        # Freeze the first 3 layers
+		for i, child in enumerate(resnet18.children()):
+			if i < 3:
+				for param in child.parameters():
+					param.requires_grad = False
+
+        # Remove the fully connected layers from the ResNet model
+		modules = list(resnet18.children())[:-1]
+		self.resnet18 = nn.Sequential(*modules)
+
+		resnet_out_shape = self._get_resnet_out_shape()
+		self.fc1 = nn.Linear(resnet_out_shape, hidden_dim_drug)
+
+		self.dropout = nn.Dropout(p=drop_rate)
+
+	def _get_resnet_out_shape(self):
+		# Pass an example image through the ResNet model and get its output shape
+		example_input = torch.zeros((self.batch_size, 3, 200, 200))
+		resnet_out = self.resnet18(example_input)
+		resnet_out_shape = resnet_out.shape[1]
+		return resnet_out_shape
+
+	def forward(self, x):
+        # Pass the image through the ResNet model
+		x = self.resnet18(x)
+		
+		batch_size = x.shape[0]
+        # Flatten the output
+		x = x.view(batch_size, -1)
+
+        # Pass the flattened output through the fully connected layers
+		x = self.fc1(x)
+		x = self.dropout(x)
+		return x

@@ -27,17 +27,20 @@ class HyperBand:
             max_budget=1,
             direction='min',
             split_method = 'random',
+            dataset = 'DAVIS',
             verbose=False,
     ):
         self.base_worker = base_worker
         self.configspace = configspace
         self.verbose = verbose
+
         self.direction = direction
 
         # Hyperband related stuff
         self.eta = eta
         self.max_budget = max_budget
         self.split_method = split_method
+        self.dataset = dataset
         
         # calculate the hyperband run using the max_budget the eta parameters that are provided by the user
         self.budgets_per_bracket = self.calculate_hyperband_iters(

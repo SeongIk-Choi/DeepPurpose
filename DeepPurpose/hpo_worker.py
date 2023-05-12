@@ -96,9 +96,8 @@ class BaseWorker:
                 #update_cnn_target_kernels = [int(temp_config['cnn_target_kernel_number']), int(temp_config['cnn_target_kernel_number'])*2, int(temp_config['cnn_target_kernel_number'])*3]
                 final_config.update({'cnn_target_filters':CNN_target_filters, 'cnn_target_kernels': CNN_target_kernels})
 
-            if final_config['drug_encoding'] in MLP_drug_list or final_config['target_encoding'] in MLP_target_list :
+            if final_config['drug_encoding'] in MLP_drug_list:
                 mlp_hidden_dim_drug.append(int(temp_config['mlp_hidden_dim_drug_number']))                    
-                mlp_hidden_dim_target.append(int(temp_config['mlp_hidden_dim_target_number']))
                 
                 if int(final_config['depth']) == 1:
                     pass
@@ -108,11 +107,19 @@ class BaseWorker:
                             mlp_hidden_dim_drug.append(int(temp_config['mlp_hidden_dim_drug_number']/((i+1)*4)))
                         if int(temp_config['mlp_hidden_dim_drug_number']/((i+1)*4)) == int(0):
                             mlp_hidden_dim_drug.append(int(1))
+
+            if final_config['target_encoding'] in MLP_target_list :
+                mlp_hidden_dim_target.append(int(temp_config['mlp_hidden_dim_target_number']))
+                
+                if int(final_config['depth']) == 1:
+                    pass
+                else:
+                    for i in range(int(final_config['depth'])-1):
                         if int(temp_config['mlp_hidden_dim_target_number']/((i+1)*4)) != int(0):
                             mlp_hidden_dim_target.append(int(temp_config['mlp_hidden_dim_target_number']/((i+1)*4)))
                         if int(temp_config['mlp_hidden_dim_target_number']/((i+1)*4)) == int(0):
                             mlp_hidden_dim_target.append(int(1))
-                    
+
                     #update_mlp_hidden_dim_drug = [int(temp_config['mlp_hidden_dim_drug_number']), int(temp_config['mlp_hidden_dim_drug_number']/4), int(temp_config['mlp_hidden_dim_drug_number']/16)]
                     #update_mlp_hidden_dim_target = [int(temp_config['mlp_hidden_dim_target_number']), int(temp_config['mlp_hidden_dim_target_number']/4), int(temp_config['mlp_hidden_dim_target_number']/16)]
 
@@ -175,3 +182,5 @@ class BaseWorker:
             'loss': str(min(val_results)),  # remember: always minimizes!
             'info': {'model_dir': self.config_to_model[model_config_key]['model_dir'][-1], 'config': self.report_config},
         }
+    torch.cuda.empty_cache()
+
