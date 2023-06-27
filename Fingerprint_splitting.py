@@ -11,50 +11,47 @@ from DeepPurpose.hpo_worker import BaseWorker
 from DeepPurpose.simple_hyperband import HyperBand
 import torch
 os.sched_setaffinity(0,aff)
-from sklearn.metrics.pairwise import pairwise_distances
-from sklearn.metrics.pairwise import cosine_similarity
 from rdkit import DataStructs
 import seaborn as sns
+import pandas as pd
+import matplotlib.pyplot as plt
+from rdkit.Chem.Scaffolds import MurckoScaffold
+from collections import defaultdict
+from sklearn.model_selection import train_test_split
 from rdkit.Chem import rdMolDescriptors
+import deepchem as dc
+import numpy as np
 
-# Generate train, val, test dataset
-drug_encoding = 'CNN'
-target_encoding = 'CNN'
 
 X_drug_DAVIS, X_target_DAVIS, y_DAVIS = load_process_KIBA('./data/', binary=False)
 
-train_DAVIS, val_DAVIS, test_DAVIS = data_process(X_drug_DAVIS, X_target_DAVIS, y_DAVIS,
-                                drug_encoding, target_encoding,
-                                split_method='cold_drug',frac=[0.7,0.1,0.2])
+def fingerprint_split(smiles_list):
+
+    Xs = np.zeros(len(X_drug_DAVIS))
+    # creation of a deepchem dataset with the smile codes in the ids field
+    dataset = dc.data.DiskDataset.from_numpy(X=Xs,ids=X_drug_DAVIS)
+    fingerprintsplitter = dc.splits.FingerprintSplitter()
+    train_dataset, val_dataset, test_dataset = fingerprintsplitter.train_valid_test_split(dataset, frac_train=0.7, frac_val=0.1, frac_test=0.2)
+    return train_dataset.ids, test_dataset.ids
 
 def get_fingerprints(smiles_list):
     mols = [Chem.MolFromSmiles(smile) for smile in smiles_list]
     fingerprints = [rdMolDescriptors.GetMorganFingerprintAsBitVect(mol, 2, nBits=1024) for mol in mols]
     return fingerprints
 
-def heatmap_generator(unique_drugs_train, unique_drugs_test):
-
-    # create empty similarity matrix with shape (n_drugs_DAVIS, n_drugs_KIBA)
-    similarity_matrix = np.zeros((len(unique_drugs_train), len(unique_drugs_test)))
-
-    for i in range(len(unique_drugs_train)):
-        for j in range(len(unique_drugs_test)):
-            similarity = DataStructs.TanimotoSimilarity(unique_drugs_train[i], unique_drugs_test[j])
-            similarity_matrix[i,j] = similarity
-
-    fig, ax = plt.subplots(figsize=(5,5))
-    plt.imshow(similarity_matrix, cmap='hot', interpolation='nearest')
-    plt.colorbar()
-    ax.set_xlabel('Test') # testset
-    ax.set_ylabel('Train') # trainset
-    ax.set_title('Tanimoto Similarity Heat Map')
-    plt.savefig('Tanimoto Similarity.png')
-
-
 def distribution_generator(unique_drugs_train, unique_drugs_test):
     similarity_matrix_a = np.zeros((len(unique_drugs_train), len(unique_drugs_train)))
     similarity_matrix_b = np.zeros((len(unique_drugs_train), len(unique_drugs_test)))
     similarity_matrix_c = np.zeros((len(unique_drugs_test), len(unique_drugs_test)))
+
+    # vector_a = [] 
+    # vector_b = []
+
+    # for i in range(len(unique_drugs_train)):
+    #     vector_a.append(unique_drugs_train[i])
+
+    # for j in range(len(unique_drugs_test)):
+    #     vector_b.append(unique_drugs_test[j])
 
     # For train-train sets
     for i in range(len(unique_drugs_train)):
@@ -96,12 +93,16 @@ def distribution_generator(unique_drugs_train, unique_drugs_test):
     plt.legend()
 
     # Save the figure
-    plt.savefig('Tanimoto Similarity_Distribution_KIBA_Final.png')
+    plt.savefig('Tanimoto Similarity_Distribution_fingerprint_KIBA_Final.png')
 
-unique_drugs_train_list = list(set(train_DAVIS['SMILES']))
-unique_drugs_test_list = list(set(test_DAVIS['SMILES']))
+smiles_list = X_drug_DAVIS
+
+train_smiles, test_smiles = fingerprint_split(smiles_list)
+
+unique_drugs_train_list = list(set(train_smiles))
+unique_drugs_test_list = list(set(test_smiles))
 
 unique_drugs_train = get_fingerprints(unique_drugs_train_list)
 unique_drugs_test = get_fingerprints(unique_drugs_test_list)
 
-distribution_generator(unique_drugs_train, unique_drugs_test)
+figure = distribution_generator(unique_drugs_train, unique_drugs_test)
